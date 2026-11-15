@@ -4,11 +4,13 @@
 from __future__ import annotations
 
 import argparse
+import os
 import sys
 from pathlib import Path
 
 DEFAULT_MODEL_ID = "Qwen/Qwen2.5-VL-7B-Instruct"
 DEFAULT_LOCAL_DIR = Path("/root/autodl-tmp/models/Qwen2.5-VL-7B-Instruct")
+DEFAULT_ENDPOINT = "https://huggingface.co"
 
 
 def parse_args() -> argparse.Namespace:
@@ -26,11 +28,25 @@ def parse_args() -> argparse.Namespace:
         help=f"Destination directory (default: {DEFAULT_LOCAL_DIR}).",
     )
     parser.add_argument("--revision", default=None, help="Optional branch, tag, or commit hash.")
+    parser.add_argument(
+        "--endpoint",
+        default=os.environ.get("HF_ENDPOINT", DEFAULT_ENDPOINT),
+        help="Hugging Face Hub endpoint (default: HF_ENDPOINT or huggingface.co).",
+    )
+    parser.add_argument(
+        "--disable-xet",
+        action="store_true",
+        help="Use standard HTTP/LFS downloads instead of the Xet transfer backend.",
+    )
     return parser.parse_args()
 
 
 def main() -> int:
     args = parse_args()
+    os.environ["HF_ENDPOINT"] = args.endpoint
+    if args.disable_xet:
+        os.environ["HF_HUB_DISABLE_XET"] = "1"
+
     try:
         from huggingface_hub import snapshot_download
     except ImportError:
@@ -42,8 +58,9 @@ def main() -> int:
         return 2
 
     args.local_dir.parent.mkdir(parents=True, exist_ok=True)
-    print(f"Downloading {args.model_id} to {args.local_dir}")
-    print("Hugging Face credentials are read from the local CLI login or HF_TOKEN.")
+    print(f"Downloading {args.model_id} to {args.local_dir}", flush=True)
+    print(f"Hub endpoint: {args.endpoint}", flush=True)
+    print("Hugging Face credentials are read from the local CLI login or HF_TOKEN.", flush=True)
     try:
         downloaded_path = snapshot_download(
             repo_id=args.model_id,
