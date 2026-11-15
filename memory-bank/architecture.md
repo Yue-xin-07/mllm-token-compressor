@@ -14,6 +14,8 @@
 
 ## 源码与验证目录
 
-- `compressor/`: Token 压缩核心算法源码；`.gitkeep` 仅用于保留当前空目录。
-- `scripts/`: 环境检查、模型下载和压测工具；`.gitkeep` 仅用于保留当前空目录。
-- `tests/`: Pytest 单元测试和正确性回归；`.gitkeep` 仅用于保留当前空目录。
+- `compressor/`: Token 压缩核心算法源码。
+- `scripts/check_env.py`: 检查 Python、PyTorch、CUDA/GPU、Transformers、FlashAttention-2、vLLM 与 Accelerate；可选择运行 Qwen2.5-VL 短文本生成冒烟验证。
+- `scripts/download_model.py`: 使用 Hugging Face Hub 下载或续传模型快照，默认保存到 AutoDL 数据盘。
+- `scripts/`: 环境检查、模型下载和后续压测工具。
+- `tests/`: Pytest 单元测试和正确性回归。
