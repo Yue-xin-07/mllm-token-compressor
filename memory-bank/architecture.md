@@ -4,6 +4,7 @@
 
 - `AGENTS.md`: AI 开发规则、Memory Bank 更新要求、AutoDL 远程连接说明。
 - `.gitignore`: 排除 Python 缓存、虚拟环境、Notebook 检查点、模型权重、数据集、运行产物和本地临时文件。
+- `.venv/`: 项目隔离 Python 3.11 环境；当前 GPU runtime 使用 PyTorch 2.5.1+cu121。
 
 ## 记忆库
 
