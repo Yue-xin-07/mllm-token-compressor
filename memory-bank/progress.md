@@ -1,21 +1,19 @@
 # 进度追踪 (Progress Tracker)
 
-- **当前状态**: Step 0（环境准备、依赖安装与 Qwen2.5-VL 权重下载）进行中；GPU 依赖已安装，正在运行模型前向生成验证。
+- **当前状态**: Step 0 已完成；Step 1 尚未开始。
 - **已完成任务**:
-  - 项目脚手架与记忆库初始化。
-  - 在 AutoDL 项目目录初始化 `main` 分支、创建首次提交并推送到 GitHub。
-  - 新增 `scripts/check_env.py` 和 `scripts/download_model.py`；前者支持无模型诊断与 GPU 模型生成验证，后者支持自定义仓库/路径/endpoint、Hugging Face CLI 凭据、断点续传和禁用 Xet。
-  - 安装 uv 0.13.8、隔离 Python 3.11.18、Hugging Face Hub 0.36.2 与 Transformers 4.51.3。
-  - Qwen2.5-VL-7B-Instruct 权重已下载至 `/root/autodl-tmp/models/Qwen2.5-VL-7B-Instruct`；5 个 safetensors 分片完整，共 16,584,414,560 字节；配置模型类型为 `qwen2_5_vl`。
-  - 安装 PyTorch 2.5.1+cu121、TorchVision 0.20.1+cu121、TorchAudio 2.5.1+cu121、vLLM 0.7.3、FlashAttention-2 2.8.3.post2 和 Accelerate 1.15.0。
-  - `uv pip check` 报告 151 个包兼容；Torch、Transformers、vLLM 和 FlashAttention-2 均可导入，CUDA runtime 12.1 可用并识别 RTX 4090。
+  - 项目脚手架与记忆库初始化；在 AutoDL 项目目录初始化 `main` 分支并推送首次提交。
+  - 新增 `scripts/check_env.py` 和 `scripts/download_model.py`。
+  - 配置 uv 0.13.8 与隔离 Python 3.11.18；安装 Hugging Face Hub 0.36.2、Transformers 4.51.3、PyTorch 2.5.1+cu121、TorchVision 0.20.1+cu121、TorchAudio 2.5.1+cu121、vLLM 0.7.3、FlashAttention-2 2.8.3.post2、Accelerate 1.15.0 和 setuptools 80.10.2。
+  - 下载 Qwen2.5-VL-7B-Instruct 至 `/root/autodl-tmp/models/Qwen2.5-VL-7B-Instruct`；5 个权重分片完整，共 16,584,414,560 字节。
+  - `uv pip check` 通过；脚本语法、`--help` 与无模型诊断检查通过。
+  - 运行 `python scripts/check_env.py` 通过：检测到 CUDA 12.1 与 RTX 4090；5 个权重分片以 BF16 加载，短文本生成返回 `OK`。
 - **当前正在进行的任务**:
-  - 运行 `python scripts/check_env.py`，加载本地 Qwen2.5-VL 权重并执行短文本生成。
+  - 无。
 - **下一步**:
-  - 若冒烟验证通过，更新 `implementation-plan.md` 勾选 Step 0，更新进度并提交。
-  - 若失败，根据实际报错修复兼容问题并重试。
+  - 开始 Step 1：设计并实现跨模态 Token 动态剪枝与预算分配核心算法，为算法模块新增 pytest 单元测试并运行通过。
 - **已知阻碍/验证记录**:
-  - AutoDL 驱动 595.71.05 报告 CUDA 13.2；已选择 CUDA 12.1 PyTorch runtime，RTX 4090 上 CUDA 检查通过。
-  - AutoDL 容器仅分配约半个 CPU 核，vLLM wheel 的多组预编译 CUDA 库解包耗时约 53 分钟；安装最终成功。
+  - AutoDL 驱动 595.71.05 报告 CUDA 13.2；PyTorch CUDA 12.1 runtime 已验证正常。
+  - 首次模型冒烟检查因隔离环境缺少 setuptools 失败；安装 setuptools 80.10.2 后重跑成功。
   - AutoDL 无法连接 `huggingface.co:443`；模型下载通过兼容镜像完成。
-  - SSH 别名曾在 banner 阶段超时；使用 Cloudflare DoH 获取当前公网 IP 并保留主机密钥校验后连接成功。
+  - vLLM 二进制 wheel 解包受容器半核 CPU 限制，安装完成后依赖检查通过。

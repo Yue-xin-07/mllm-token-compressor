@@ -1,8 +1,8 @@
 # 工业级实现计划 (Implementation Plan)
 
-- [ ] **Step 0: 环境准备、依赖安装与 Qwen2.5-VL 模型权重下载**
+- [x] **Step 0: 环境准备、依赖安装与 Qwen2.5-VL 模型权重下载**
   - **任务**: 检查 RTX 4090 算力环境，安装 FlashAttention-2 与 vLLM，编写下载脚本将 `Qwen2.5-VL-7B-Instruct` 权重拉取至本地。
-  - **验证标准**: 运行 `python scripts/check_env.py`，成功加载模型并完成一次前向推理不报错。
+  - **验证标准**: 运行 `python scripts/check_env.py`，成功加载模型并完成一次前向推理不报错。**已通过**：模型在 RTX 4090 上以 BF16 加载并生成 `OK`。
 
 - [ ] **Step 1: 跨模态 Token 动态剪枝与预算分配核心算法**
   - **任务**: 在 `compressor/token_pruner.py` 实现基于跨模态注意力得分及矩阵熵的动态裁剪模块，并完美对齐 M-RoPE 空间位置编码。
