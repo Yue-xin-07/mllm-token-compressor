@@ -38,3 +38,8 @@
 - 推理模式计算，不保留请求张量；评分采用 FP32，同分时原索引较小者优先，输出保留原序列顺序。
 - next_position 为原始三轴位置最大值加一，空序列返回零；它不是物理 cache_position 或 Transformers rope_delta，不能按压缩长度重新生成视觉网格坐标。
 - Step 2 负责真实模型注意力提取、vLLM Prefill 接入、批次与序列元数据、后续解码位置、KV Cache 及 Block Table 适配。本阶段未验证长上下文端到端性能或下游任务精度。
+
+## Step 2 集成
+
+- `compressor/attention_probe.py`：旋转后的 Q/K 到 [H,Q,V] 条件视觉注意力，分块计算、GQA 头映射、空因果行归零。
+- `tests/test_attention_probe.py`：完整注意力参考对照、空证据、非法索引及 GPU 精度。
