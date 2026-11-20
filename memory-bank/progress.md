@@ -8,10 +8,16 @@
   - 下载 Qwen2.5-VL-7B-Instruct 至 `/root/autodl-tmp/models/Qwen2.5-VL-7B-Instruct`；5 个权重分片完整，共 16,584,414,560 字节。
   - `uv pip check` 通过；脚本语法、`--help` 与无模型诊断检查通过。
   - 运行 `python scripts/check_env.py` 通过：检测到 CUDA 12.1 与 RTX 4090；5 个权重分片以 BF16 加载，短文本生成返回 `OK`。
+  - Step 1 基线已完成：新增注意力评分、熵驱动预算、确定性视觉 Token 剪枝与原始 M-RoPE 坐标对齐；完整单测 48 passed。
+  - Step 1 算法及验收已提交：afc6292（评分预算）、98c0980（剪枝与位置对齐）、d57842c（GPU 验收）。
 - **当前正在进行的任务**:
   - 无。
 - **下一步**:
-  - 开始 Step 2：在 vLLM Prefill 中接入注意力提取与剪枝，处理 M-RoPE 后续解码、KV Cache 与 Block Table；先验证当前 vLLM 版本可行的接入位置。
+  - **Step 2：vLLM 推理引擎源码级植入与 PagedAttention 适配（尚未开始）**。
+  - 检查 vLLM 0.7.3 的 Qwen2.5-VL 前向、Prefill 和注意力元数据路径，确定注意力提取与剪枝接入位置。
+  - 接入 Step 1 基线并同步序列长度、保留索引和原始 M-RoPE 坐标，正确衔接后续解码位置。
+  - 适配 KV Cache、slot mapping 与 Block Table 的分配和回收，补充对应正确性测试。
+  - 验收：单元测试通过，并在 vLLM 离线推理模式下成功跑通长文本多模态请求。
 - **已知阻碍/验证记录**:
   - AutoDL 驱动 595.71.05 报告 CUDA 13.2；PyTorch CUDA 12.1 runtime 已验证正常。
   - 首次模型冒烟检查因隔离环境缺少 setuptools 失败；安装 setuptools 80.10.2 后重跑成功。
@@ -26,3 +32,6 @@
   - 完整验收：.venv/bin/python -m pytest tests/ -q -s，48 passed（含 RTX 4090 FP16/BF16 CPU/GPU 一致性、混合设备拒绝、多视觉段、非连续张量与被删最大坐标测试）。
   - 显存回归：10 次预热后运行 5×30 次；每轮释放输出并同步，memory_allocated 均为 673,792 字节，memory_reserved 均为 2,097,152 字节；该用例未观察到活跃张量占用增长，不代表所有负载均无泄漏。git diff --check 通过；所有新增文件少于 300 行。
   - 阶段边界：单条无 padding 序列的可测试 PyTorch 基线；上游提供已掩码 [H,Q,V] 注意力，仅将视觉内容标入掩码。尚未完成真实模型注意力提取、vLLM 集成或最终 TTFT/显存/精度指标评测。
+
+- **Step 1 交付复核**:
+  - 逐项检查本阶段 8 个新增/修改文件，补全 architecture.md 的文件职责和接口约定；本次交付整理仅修改记忆文档，沿用已通过的 48 项测试记录。

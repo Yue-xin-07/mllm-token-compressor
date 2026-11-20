@@ -1,37 +1,40 @@
 # 架构与目录说明 (Architecture & File Manifest)
 
-## 项目规则与版本控制
+## 项目规则与环境
 
-- `AGENTS.md`: AI 开发规则、Memory Bank 更新要求、AutoDL 远程连接说明。
-- `.gitignore`: 排除 Python 缓存、虚拟环境、Notebook 检查点、模型权重、数据集、运行产物和本地临时文件。
-- `.venv/`: 项目隔离 Python 3.11 环境；PyTorch 2.5.1+cu121、Transformers 4.51.3、vLLM 0.7.3、FlashAttention-2 2.8.3.post2、Accelerate 1.15.0、setuptools 80.10.2。
+- `AGENTS.md`：开发规则、Memory Bank 优先读取、单文件 300 行上限、算法单测、子步骤文档更新与提交要求，以及 AutoDL SSH 连接说明。
+- `.gitignore`：排除缓存、虚拟环境、Notebook 检查点、模型权重、数据集及运行产物。
+- `.venv/`：隔离 Python 3.11 环境；PyTorch 2.5.1+cu121、Transformers 4.51.3、vLLM 0.7.3、FlashAttention-2 2.8.3.post2 等依赖。
 
-## 记忆库
+## 记忆库与阶段状态文件
 
-- `memory-bank/architecture.md`: 本文件，记录项目文件和目录职责。
-- `memory-bank/implementation-plan.md`: Step 0–4 的实现任务和验收标准。
-- `memory-bank/progress.md`: 当前阶段、已完成事项、下一步与阻碍。
-- `memory-bank/tech-stack.md`: 目标模型、技术栈、性能目标和硬件约束。
+- `memory-bank/implementation-plan.md`：Step 0–4 的任务与验收标准；本阶段勾选 Step 1，记录 48 项测试通过及基线边界。
+- `memory-bank/progress.md`：当前进展、完成事项、测试和问题记录；本阶段记录 Step 1 完成与下一步 Step 2 的引擎集成任务。
+- `memory-bank/architecture.md`：文件功能清单、算法接口及后续集成约定；覆盖本阶段全部新增和修改文件。
+- `memory-bank/tech-stack.md`：目标模型、技术栈、硬件约束，以及最终延迟、显存和准确率目标。
+- `memory-bank/.ipynb_checkpoints/`：Notebook 自动保存的历史副本；阶段状态以目录根部正式文档为准。
 
-## 源码与验证目录
+## Step 0 环境工具
 
-- `compressor/`: Token 压缩核心算法源码。
-- `scripts/check_env.py`: 检查 Python、PyTorch、CUDA/GPU、Transformers、FlashAttention-2、vLLM 与 Accelerate；可运行 Qwen2.5-VL 短文本生成冒烟验证。
-- `scripts/download_model.py`: 使用 Hugging Face Hub 下载或续传模型快照，支持自定义 endpoint 与禁用 Xet，默认保存到 AutoDL 数据盘。
-- `scripts/`: 环境检查、模型下载和后续压测工具。
-- `tests/`: Pytest 单元测试和正确性回归。
+- `scripts/check_env.py`：检查 Python、CUDA/GPU 和推理依赖，支持 Qwen2.5-VL 短文本生成冒烟验证。
+- `scripts/download_model.py`：下载或续传 Hugging Face 模型快照，支持自定义 endpoint 与禁用 Xet，默认保存至 AutoDL 数据盘。
 
-## Step 1 算法基线
+## Step 1 算法源码（新增）
 
-- compressor/scoring.py：AttentionBudget 与 score_attention，接收 [H,Q,V] 非负注意力权重，输出 FP32 重要性、归一化行熵与视觉预算；忽略全零行。
-- compressor/__init__.py：压缩算法包入口。
-- tests/test_scoring.py：评分、预算、无证据回退及非法输入测试。
-- compressor/token_pruner.py：TokenPruner 接收 [S,D] 隐藏状态、int64 [3,S] 原始位置、bool [S] 视觉内容掩码、[H,Q,V] 注意力；返回 PruningResult（压缩张量、保留索引、视觉预算、熵、原始 next_position）。特殊 Token 不得标为视觉内容；next_position 不是 cache_position/rope_delta。
-- tests/test_pruner.py：确定性选择、文本/坐标/索引对齐、空输入、回退与参数验证。
+- `compressor/__init__.py`：声明压缩算法 Python 包；具体接口从子模块导入。
+- `compressor/scoring.py`：定义 AttentionBudget 和 score_attention；接收浮点 [H,Q,V] 非负有限权重，按有效行归一化，输出 FP32 重要性、归一化行 Shannon 熵均值与动态保留数量；零行不参与统计，无有效证据时保留全部。
+- `compressor/token_pruner.py`：定义 TokenPruner 和 PruningResult；校验输入后稳定筛选视觉 Token、保留全部非视觉 Token，按原序列顺序 gather 隐藏状态与原始三轴 M-RoPE 坐标，返回保留索引、实际视觉预算、熵及原序列下一位置起点。
 
-## Step 1 验收与后续集成约定
+## Step 1 单元测试（新增）
 
-- 默认视觉预算：ceil(V × (0.25 + 0.50 × H))，H 为有效注意力行归一化 Shannon 熵均值；至少保留一个视觉 Token。无有效证据保留全部，零视觉输入直通。不是谱熵。
-- 推理模式、不存储请求张量、FP32 评分、稳定降序排序；输出按原始顺序 gather。单序列接口，不负责批量 padding、注意力提取或 KV Cache。
-- tests/test_pruner.py：额外包含 CUDA FP16/BF16 对照、混合设备、活跃显存回归、多视觉段和删除最大坐标测试；完整 tests/ 共 48 项通过。
-- 未来 vLLM 适配须区分原始三轴位置、next_position、物理 cache_position 和 rope_delta；不得用压缩长度重新生成视觉网格坐标。
+- `tests/test_scoring.py`：验证熵与预算关系、逐行归一化、零行忽略、空输入/无证据回退、非法权重/比例，以及大数值稳定性和推理模式。
+- `tests/test_pruner.py`：验证确定性排序、文本与索引/三轴坐标对齐、输入不变、空序列与非法输入、多视觉段及非连续张量、删除最大坐标后的生成起点；包含 RTX 4090 FP16/BF16 CPU/GPU 对照、混合设备拒绝和重复调用活跃显存回归。
+- 完整验收命令：`.venv/bin/python -m pytest tests/ -q -s`，48 passed；每个新增 Python 文件均少于 300 行。
+
+## 算法接口与 Step 2 集成约定
+
+- 单条无 padding 序列输入：隐藏状态 [S,D]、int64 原始位置 [3,S]、bool 视觉内容掩码 [S]、已应用有效位置/因果掩码的跨模态注意力 [H,Q,V]。V 列按原视觉 Token 顺序排列，特殊 Token 不得标入视觉掩码。
+- 默认视觉预算为 ceil(V × (0.25 + 0.50 × entropy))；有视觉 Token 时至少保留一个，无有效注意力则保留全部。此基线采用行 Shannon 熵均值，不是谱熵。
+- 推理模式计算，不保留请求张量；评分采用 FP32，同分时原索引较小者优先，输出保留原序列顺序。
+- next_position 为原始三轴位置最大值加一，空序列返回零；它不是物理 cache_position 或 Transformers rope_delta，不能按压缩长度重新生成视觉网格坐标。
+- Step 2 负责真实模型注意力提取、vLLM Prefill 接入、批次与序列元数据、后续解码位置、KV Cache 及 Block Table 适配。本阶段未验证长上下文端到端性能或下游任务精度。
