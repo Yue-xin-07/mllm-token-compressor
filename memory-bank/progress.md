@@ -1,6 +1,6 @@
 # 进度追踪 (Progress Tracker)
 
-- **当前状态**: Step 0、Step 1 已完成；Step 2 进行中：注意力探针已完成，准备请求与引擎适配。
+- **当前状态**: Step 0、Step 1、Step 2 单卡单请求首版已完成；Step 3 尚未开始。
 - **已完成任务**:
   - 项目脚手架与记忆库初始化；在 AutoDL 项目目录初始化 `main` 分支并推送首次提交。
   - 新增 `scripts/check_env.py` 和 `scripts/download_model.py`。
@@ -13,11 +13,10 @@
 - **当前正在进行的任务**:
   - 无。
 - **下一步**:
-  - **Step 2：vLLM 推理引擎源码级植入与 PagedAttention 适配（尚未开始）**。
-  - 检查 vLLM 0.7.3 的 Qwen2.5-VL 前向、Prefill 和注意力元数据路径，确定注意力提取与剪枝接入位置。
-  - 接入 Step 1 基线并同步序列长度、保留索引和原始 M-RoPE 坐标，正确衔接后续解码位置。
-  - 适配 KV Cache、slot mapping 与 Block Table 的分配和回收，补充对应正确性测试。
-  - 验收：单元测试通过，并在 vLLM 离线推理模式下成功跑通长文本多模态请求。
+  - **Step 3：Triton 自定义算子加速核心瓶颈**。
+  - 先测量 Step 2 注意力探针、评分及筛选开销，再确定融合算子边界。
+  - 保持 PyTorch 参考实现与确定性语义，新增算子测试；目标相对 PyTorch 提速 ≥20%。
+  - 多请求调度、32K 端到端及最终性能/精度不属于已完成的 Step 2 首版验收。
 - **已知阻碍/验证记录**:
   - AutoDL 驱动 595.71.05 报告 CUDA 13.2；PyTorch CUDA 12.1 runtime 已验证正常。
   - 首次模型冒烟检查因隔离环境缺少 setuptools 失败；安装 setuptools 80.10.2 后重跑成功。
@@ -39,3 +38,13 @@
 - **Step 2.1**：新增分块 GQA 视觉注意力探针，应用原序列因果掩码；16 项测试通过（含 GPU FP16/BF16）。尚未接入真实模型。
 
 - **Step 2.2**：PreparedRequest 与第一层 QK 探针请求准备已实现；3 项测试通过，覆盖坐标/embeddings/索引对齐、无文本证据及全保留。准备结果区分物理长度与原始 next_position。
+
+
+- **Step 2.3 引擎集成与验收**：
+  - 已实现请求压缩后再注册原生调度器，按压缩长度分配 KV blocks；原始 M-RoPE 与 cache offset 独立。
+  - 可恢复 runner/model 钩子、decode 偏移、失败 abort/资源回收及 close；无 site-packages 文件改动。
+  - 发现 torch 2.5.1 缺少 flash-attn 视觉 rotary 所需 wrap_triton；采用 vLLM 自带 PyTorch rotary 兼容，未更换依赖。
+  - 常规测试 72 passed、6 skipped；真实模型显式验收 6 passed，含原生/全保留一致、长输入、纯文本、双图、视频和异常恢复。
+  - 长输入 5687→5671，视觉 Token 64→48；40 步生成，块峰值 358→357（16 Token/块），空闲块前后均 3736。
+  - docs/step2-integration.md 与 docs/step2-validation.json 记录运行方式、边界和验收；git diff --check 与文件行数检查通过。
+  - 未证明 TTFT、32K、全局 KV pool 预留显存缩减或下游准确率达标。

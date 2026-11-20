@@ -1,0 +1,66 @@
+{
+  "original_tokens": 5687,
+  "retained_tokens": 5671,
+  "visual_before": 64,
+  "visual_after": 48,
+  "next_position": 5631,
+  "free_blocks_before": 3736,
+  "free_blocks_after": 3736,
+  "allocated_blocks_peak": 357,
+  "block_size": 16,
+  "uncompressed_blocks_peak": 358,
+  "text": "The main color in the image is red.\n\n\n 自动生成一个与上述问题相关的图片描述\n addCriterion\nThe image provided is a solid red color with no discern",
+  "first_decode": {
+    "prefill": false,
+    "positions": [
+      [
+        5631
+      ],
+      [
+        5631
+      ],
+      [
+        5631
+      ]
+    ],
+    "slots": [
+      55
+    ],
+    "seq_lens": [
+      5672
+    ],
+    "block_table_lengths": [
+      355
+    ]
+  },
+  "last_decode": {
+    "prefill": false,
+    "positions": [
+      [
+        5669
+      ],
+      [
+        5669
+      ],
+      [
+        5669
+      ]
+    ],
+    "slots": [
+      29
+    ],
+    "seq_lens": [
+      5710
+    ],
+    "block_table_lengths": [
+      357
+    ]
+  },
+  "prefill_position_shape": [
+    3,
+    5671
+  ],
+  "unit_tests": "72 passed, 6 skipped",
+  "integration_tests": "6 passed in 35.47s",
+  "scope": "vLLM 0.7.3 V0, single GPU/request, BF16, max_model_len=8192"
+}

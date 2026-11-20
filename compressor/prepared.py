@@ -24,6 +24,7 @@ class PreparedRequest:
 @torch.inference_mode()
 def prepare_request(model, token_ids, positions, mm_kwargs, special_ids,
                     min_ratio=.25, max_ratio=.75):
+    pruner = TokenPruner(min_ratio, max_ratio)
     ids = torch.tensor(token_ids, device=positions.device, dtype=torch.long)
     visual = (ids == model.config.image_token_id) | (
         ids == model.config.video_token_id)
@@ -46,7 +47,7 @@ def prepare_request(model, token_ids, positions, mm_kwargs, special_ids,
             q.reshape(-1, attn.num_heads, attn.head_dim),
             k.reshape(-1, attn.num_kv_heads, attn.head_dim),
             torch.where(query_mask)[0], torch.where(visual)[0])
-    result = TokenPruner(min_ratio, max_ratio)(
+    result = pruner(
         embeddings, positions, visual, attention)
     kept = result.kept_indices
     return PreparedRequest(

@@ -1,4 +1,5 @@
 from types import SimpleNamespace
+import pytest
 import torch
 from compressor.prepared import prepare_request
 
@@ -48,3 +49,10 @@ def test_text_only():
                              torch.arange(3).expand(3, -1), {}, [1, 2])
     assert result.visual_before == result.visual_after == 0
     assert result.token_ids == [1, 3, 2]
+
+
+@pytest.mark.parametrize("ratios", [(.9, .2), (0., .5)])
+def test_invalid_budget_before_model_access(ratios):
+    with pytest.raises(ValueError):
+        prepare_request(None, [], torch.empty(3, 0, dtype=torch.long),
+                        {}, [], *ratios)

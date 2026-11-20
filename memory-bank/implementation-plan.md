@@ -8,9 +8,9 @@
   - **任务**: 在 `compressor/token_pruner.py` 实现基于跨模态注意力得分及矩阵熵的动态裁剪模块，并完美对齐 M-RoPE 空间位置编码。
   - **验证标准**: 运行 `pytest tests/test_pruner.py`，确保张量 Shape 变换正确且无内存泄漏。**基线已通过**：.venv/bin/python -m pytest tests/ -q -s，48 passed；含 RTX 4090 FP16/BF16 一致性及重复调用活跃显存稳定性测试。矩阵熵采用有效注意力行的归一化 Shannon 熵均值；真实模型注意力提取与引擎集成归 Step 2。
 
-- [ ] **Step 2: vLLM 推理引擎源码级植入与 PagedAttention 适配**
+- [x] **Step 2: vLLM 推理引擎源码级植入与 PagedAttention 适配**
   - **任务**: 将剪枝模块嵌入 vLLM 的 Prefill 阶段前向管线，处理好稀疏 Token 带来的 Block Table 显存碎片回收。
-  - **验证标准**: 在 vLLM 离线推理模式下成功跑通长文本多模态请求。
+  - **验证标准**: 在 vLLM 离线推理模式下成功跑通长文本多模态请求。**受限首版已通过**：单卡单请求 V0、5687 Token 输入和 40 步解码；72 项常规测试、6 项真实模型测试。图像/双图/视频、全保留对照、缓存回收及异常恢复通过；详见 docs/step2-integration.md。未验收 32K 或最终性能/精度指标。
 
 - [ ] **Step 3: Triton 自定义算子加速核心瓶颈**
   - **任务**: 针对 Token 评分筛选编写 `@triton.jit` 融合算子，减少 GPU HBM 访存。

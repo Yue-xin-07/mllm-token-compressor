@@ -46,3 +46,16 @@
 
 - `compressor/prepared.py`：PreparedRequest、真实模型第一层 QKV 探针、视觉与文本 query 掩码、复用 Step 1 剪枝。
 - `tests/test_prepared.py`：准备结果对齐、rope_delta、全保留与纯文本。
+
+- `compressor/vllm_engine.py`：版本限定单进程离线引擎；原生预处理、M-RoPE、准备请求、压缩序列注册、原生块管理、异常回收与资源关闭。
+- `compressor/vllm_bridge.py`：可恢复 runner/model 钩子，注入 Prefill embeddings/原始位置，记录位置/slot/Block Table；不改写缓存元数据。
+- `compressor/vllm_compat.py`：torch 2.5 缺失 wrap_triton 时的视觉 rotary 参考实现兼容与恢复。
+- `scripts/run_compressed.py`：合成图像长文本离线入口、全保留开关及 JSON 诊断输出。
+- `tests/test_vllm_bridge.py`、`tests/test_vllm_compat.py`：钩子恢复、元数据不变和兼容数值单测。
+- `tests/test_vllm_integration.py`：环境变量显式开启的 6 项真实模型验收，单次加载模型；默认常规测试跳过。
+- `docs/step2-integration.md`、`docs/step2-validation.json`：运行接口、适用范围、设计及可追溯验收摘要。
+
+Step 2 首版固定单卡、单请求、n=1；关闭 prefix caching、chunked prefill、
+CUDA Graph、异步输出和 swap。使用第一层 QKV 预探针，在调度分配前决定视觉预算；
+所有层从压缩 embeddings 开始 Prefill。多请求和中间层剪枝未实现。
+验收 72 项常规测试 + 6 项真实模型测试；5687 Token 不代表 32K 或最终业务指标。
