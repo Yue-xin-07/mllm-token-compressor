@@ -1,6 +1,6 @@
 # 进度追踪 (Progress Tracker)
 
-- **当前状态**: Step 0 已完成；Step 1 进行中，评分与预算子步骤已完成。
+- **当前状态**: Step 0 已完成；Step 1 进行中，评分预算、剪枝与位置对齐子步骤已完成，等待 GPU 验收。
 - **已完成任务**:
   - 项目脚手架与记忆库初始化；在 AutoDL 项目目录初始化 `main` 分支并推送首次提交。
   - 新增 `scripts/check_env.py` 和 `scripts/download_model.py`。
@@ -21,3 +21,5 @@
 - **Step 1 子步骤记录**:
   - 评分与预算：FP32 按有效注意力行归一化，以行 Shannon 熵均值驱动默认 25%–75% 保留比例；无证据保留全部。不是谱熵，也尚未接入模型注意力提取。
   - 验证：.venv/bin/python -m pytest tests/test_scoring.py -q，16 passed。
+  - 剪枝与位置对齐：新增单序列 TokenPruner/PruningResult，稳定排序、保留所有非视觉 Token、原样 gather 三轴位置，输出原序列下一位置起点；无 padding/KV Cache 管理。
+  - 验证：.venv/bin/python -m pytest tests/test_scoring.py tests/test_pruner.py -q，38 passed。

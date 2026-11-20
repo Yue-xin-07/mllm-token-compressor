@@ -26,3 +26,5 @@
 - compressor/scoring.py：AttentionBudget 与 score_attention，接收 [H,Q,V] 非负注意力权重，输出 FP32 重要性、归一化行熵与视觉预算；忽略全零行。
 - compressor/__init__.py：压缩算法包入口。
 - tests/test_scoring.py：评分、预算、无证据回退及非法输入测试。
+- compressor/token_pruner.py：TokenPruner 接收 [S,D] 隐藏状态、int64 [3,S] 原始位置、bool [S] 视觉内容掩码、[H,Q,V] 注意力；返回 PruningResult（压缩张量、保留索引、视觉预算、熵、原始 next_position）。特殊 Token 不得标为视觉内容；next_position 不是 cache_position/rope_delta。
+- tests/test_pruner.py：确定性选择、文本/坐标/索引对齐、空输入、回退与参数验证。
