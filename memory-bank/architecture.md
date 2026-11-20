@@ -43,3 +43,6 @@
 
 - `compressor/attention_probe.py`：旋转后的 Q/K 到 [H,Q,V] 条件视觉注意力，分块计算、GQA 头映射、空因果行归零。
 - `tests/test_attention_probe.py`：完整注意力参考对照、空证据、非法索引及 GPU 精度。
+
+- `compressor/prepared.py`：PreparedRequest、真实模型第一层 QKV 探针、视觉与文本 query 掩码、复用 Step 1 剪枝。
+- `tests/test_prepared.py`：准备结果对齐、rope_delta、全保留与纯文本。
