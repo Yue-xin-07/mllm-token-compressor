@@ -20,3 +20,9 @@
 - `scripts/download_model.py`: 使用 Hugging Face Hub 下载或续传模型快照，支持自定义 endpoint 与禁用 Xet，默认保存到 AutoDL 数据盘。
 - `scripts/`: 环境检查、模型下载和后续压测工具。
 - `tests/`: Pytest 单元测试和正确性回归。
+
+## Step 1 算法基线
+
+- compressor/scoring.py：AttentionBudget 与 score_attention，接收 [H,Q,V] 非负注意力权重，输出 FP32 重要性、归一化行熵与视觉预算；忽略全零行。
+- compressor/__init__.py：压缩算法包入口。
+- tests/test_scoring.py：评分、预算、无证据回退及非法输入测试。

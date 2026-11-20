@@ -1,6 +1,6 @@
 # 进度追踪 (Progress Tracker)
 
-- **当前状态**: Step 0 已完成；Step 1 尚未开始。
+- **当前状态**: Step 0 已完成；Step 1 进行中，评分与预算子步骤已完成。
 - **已完成任务**:
   - 项目脚手架与记忆库初始化；在 AutoDL 项目目录初始化 `main` 分支并推送首次提交。
   - 新增 `scripts/check_env.py` 和 `scripts/download_model.py`。
@@ -9,11 +9,15 @@
   - `uv pip check` 通过；脚本语法、`--help` 与无模型诊断检查通过。
   - 运行 `python scripts/check_env.py` 通过：检测到 CUDA 12.1 与 RTX 4090；5 个权重分片以 BF16 加载，短文本生成返回 `OK`。
 - **当前正在进行的任务**:
-  - 无。
+  - Step 1：实现序列剪枝、M-RoPE 对齐与完整验收。
 - **下一步**:
-  - 开始 Step 1：设计并实现跨模态 Token 动态剪枝与预算分配核心算法，为算法模块新增 pytest 单元测试并运行通过。
+  - 完成 TokenPruner 与位置对齐，新增 CPU/GPU 测试并验收。
 - **已知阻碍/验证记录**:
   - AutoDL 驱动 595.71.05 报告 CUDA 13.2；PyTorch CUDA 12.1 runtime 已验证正常。
   - 首次模型冒烟检查因隔离环境缺少 setuptools 失败；安装 setuptools 80.10.2 后重跑成功。
   - AutoDL 无法连接 `huggingface.co:443`；模型下载通过兼容镜像完成。
   - vLLM 二进制 wheel 解包受容器半核 CPU 限制，安装完成后依赖检查通过。
+
+- **Step 1 子步骤记录**:
+  - 评分与预算：FP32 按有效注意力行归一化，以行 Shannon 熵均值驱动默认 25%–75% 保留比例；无证据保留全部。不是谱熵，也尚未接入模型注意力提取。
+  - 验证：.venv/bin/python -m pytest tests/test_scoring.py -q，16 passed。
