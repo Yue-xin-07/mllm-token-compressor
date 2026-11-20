@@ -28,3 +28,10 @@
 - tests/test_scoring.py：评分、预算、无证据回退及非法输入测试。
 - compressor/token_pruner.py：TokenPruner 接收 [S,D] 隐藏状态、int64 [3,S] 原始位置、bool [S] 视觉内容掩码、[H,Q,V] 注意力；返回 PruningResult（压缩张量、保留索引、视觉预算、熵、原始 next_position）。特殊 Token 不得标为视觉内容；next_position 不是 cache_position/rope_delta。
 - tests/test_pruner.py：确定性选择、文本/坐标/索引对齐、空输入、回退与参数验证。
+
+## Step 1 验收与后续集成约定
+
+- 默认视觉预算：ceil(V × (0.25 + 0.50 × H))，H 为有效注意力行归一化 Shannon 熵均值；至少保留一个视觉 Token。无有效证据保留全部，零视觉输入直通。不是谱熵。
+- 推理模式、不存储请求张量、FP32 评分、稳定降序排序；输出按原始顺序 gather。单序列接口，不负责批量 padding、注意力提取或 KV Cache。
+- tests/test_pruner.py：额外包含 CUDA FP16/BF16 对照、混合设备、活跃显存回归、多视觉段和删除最大坐标测试；完整 tests/ 共 48 项通过。
+- 未来 vLLM 适配须区分原始三轴位置、next_position、物理 cache_position 和 rope_delta；不得用压缩长度重新生成视觉网格坐标。
