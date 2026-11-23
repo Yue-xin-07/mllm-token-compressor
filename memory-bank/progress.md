@@ -101,3 +101,5 @@
   - 修复单请求诊断标志与轨迹列表的命名冲突。完整回归 `MLLM_RUN_INTEGRATION=1 .venv/bin/python -m pytest tests/ -q` 为 **103 passed**，含 7 项真实模型测试。
 
 - **GUI Agent 工作集 1**：实现结构化历史、文本分块、BM25/近期策略和必保依赖闭包。单测 6 项通过。
+
+- **GUI Agent 工作集 2**：选中历史经原生 vLLM 路径提交，精确校验 Prefill 长度，缺失引用或预算不足时按原输入回退。32K 冒烟从 32,768 Token 压到 18,432 Token，两轮 TTFT 约 2.1 秒。正式对照已启动。

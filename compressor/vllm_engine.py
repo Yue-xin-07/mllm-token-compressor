@@ -10,8 +10,9 @@ from .vllm_workload import run_workload
 
 class CompressedEngine:
     def __init__(self, model_path, max_model_len=8192, gpu_memory_utilization=.85,
-                 *, max_num_seqs=1, max_image_pixels=None, cache_blocks=None):
+                 *, max_num_seqs=1, max_image_pixels=None, cache_blocks=None, max_images=1):
         self.max_num_seqs = max_num_seqs
+        self.max_image_pixels = max_image_pixels
         os.environ["VLLM_USE_V1"] = "0"
         os.environ["VLLM_WORKER_MULTIPROC_METHOD"] = "spawn"
         import vllm
@@ -28,7 +29,7 @@ class CompressedEngine:
             gpu_memory_utilization=gpu_memory_utilization,
             distributed_executor_backend="uni", disable_async_output_proc=True,
             disable_mm_preprocessor_cache=max_image_pixels is not None,
-            limit_mm_per_prompt=({"image": 1, "video": 0} if max_image_pixels else
+            limit_mm_per_prompt=({"image": max_images, "video": 0} if max_image_pixels else
                                  {"image": 2, "video": 1}),
             mm_processor_kwargs={"max_pixels": max_image_pixels} if max_image_pixels else None)
         from .vllm_compat import install_image_profile_compat, install_vision_rotary_compat
@@ -131,7 +132,13 @@ class CompressedEngine:
     def generate_native_batch(self, prompts, sampling_params):
         return self._run_batch(prompts, sampling_params, None)
 
-    def _run_batch(self, prompts, sampling, ratios):
+    def generate_context_batch(self, contexts, sampling_params, *, budget=18432,
+                               strategy="working_set"):
+        from .context_submission import context_submitter
+        planner = context_submitter(self, sampling_params, budget, strategy)
+        return self._run_batch(contexts, sampling_params, None, planner=planner)
+
+    def _run_batch(self, prompts, sampling, ratios, *, planner=None):
         from contextlib import nullcontext
         from vllm.inputs import token_inputs
         from vllm.sampling_params import RequestOutputKind
@@ -145,9 +152,16 @@ class CompressedEngine:
             raise ValueError("batch measurement requires cumulative outputs")
         requests = {}
         lengths = {}
+        selections = {}
         compressed = ratios is not None
 
         def submit(request_id, prompt):
+            if planner is not None:
+                sizes, selection = planner(request_id, prompt)
+                if sizes is not None:
+                    lengths[request_id] = sizes
+                selections[request_id] = selection
+                return
             if not compressed:
                 self.engine.add_request(request_id, prompt, sampling)
                 return
@@ -172,7 +186,10 @@ class CompressedEngine:
             vision_ids = {self.model.config.image_token_id, self.model.config.video_token_id}
             for result, row in zip(results, stats["requests"], strict=True):
                 count = sum(token_id in vision_ids for token_id in result.prompt_token_ids)
-                row.update(visual_tokens=count, retained_visual_tokens=count)
+                if row["visual_tokens"] is None:
+                    row.update(visual_tokens=count, retained_visual_tokens=count)
+                if planner is not None:
+                    row.update(selections[result.request_id])
         return results, stats
 
     def close(self):

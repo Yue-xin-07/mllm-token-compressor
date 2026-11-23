@@ -166,3 +166,32 @@ def test_batch_keep_all_and_failure_recovery(adapter):
     assert native_stats["kv_peak_blocks"] == stats["kv_peak_blocks"]
     assert [r.outputs[0].token_ids for r in kept] == [r.outputs[0].token_ids for r in baseline]
     assert adapter._free_blocks() == free
+
+
+
+def test_working_set_removes_history_image_and_matches_native_compact_prompt(adapter):
+    from PIL import Image
+    from compressor.working_set import GUIContext, HistoryRecord, IMAGE
+
+    old = Image.new("RGB", (560, 560), "blue")
+    current = Image.new("RGB", (224, 224), "red")
+    history = (HistoryRecord("old-image", IMAGE, old),)
+    context = GUIContext(HistoryRecord("system", "<|im_start|>user\n"), history + (
+        HistoryRecord("recent", "Look at the latest image. "),
+    ), HistoryRecord("screen", IMAGE + "What is the main color?<|im_end|>\n"
+                     "<|im_start|>assistant\n", current), "main color")
+    sampling = params(4)
+    outputs, measured = adapter.generate_context_batch([context], sampling, budget=180)
+    row, = measured["requests"]
+    compact = context.render((context.history[1],))
+    baseline, _ = adapter.generate_native_batch([compact], sampling)
+    assert row["kept_records"] == ["recent"]
+    assert row["fallback"] is None and row["retained_tokens"] <= 180
+    assert row["images_before"] == 2 and row["images_after"] == 1
+    assert outputs[0].outputs[0].token_ids == baseline[0].outputs[0].token_ids
+
+    bad = GUIContext(context.prefix, context.history, context.suffix, context.query, ("missing",))
+    fallback, stats = adapter.generate_context_batch([bad], sampling, budget=180)
+    unmodified, _ = adapter.generate_native_batch([context.render()], sampling)
+    assert stats["requests"][0]["fallback"] == "missing_reference"
+    assert fallback[0].outputs[0].token_ids == unmodified[0].outputs[0].token_ids

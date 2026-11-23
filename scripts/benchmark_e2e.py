@@ -8,7 +8,7 @@ import sys
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from benchmark_workloads import measure, workloads
+from scripts.benchmark_workloads import as_context, measure, workloads
 
 
 MODEL = "/root/autodl-tmp/models/Qwen2.5-VL-7B-Instruct"
@@ -20,11 +20,12 @@ CACHE_BLOCKS = 2114
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--mode", required=True, choices=("native", "compressed"))
+    parser.add_argument("--mode", required=True, choices=("native", "compressed", "working_set"))
     parser.add_argument("--model", default=MODEL)
     parser.add_argument("--warmup", type=int, default=3)
     parser.add_argument("--repeats", type=int, default=20)
     parser.add_argument("--gpu-memory-utilization", type=float, default=.95)
+    parser.add_argument("--case", choices=("single_32k", "mixed_2k_8k"))
     parser.add_argument("--output", type=Path, required=True)
     args = parser.parse_args()
     if args.warmup < 0 or args.repeats < 1:
@@ -57,9 +58,17 @@ def main():
     engine = CompressedEngine(args.model, MAX_MODEL_LEN,
                               args.gpu_memory_utilization, max_num_seqs=2,
                               max_image_pixels=MAX_IMAGE_PIXELS, cache_blocks=CACHE_BLOCKS)
-    run = engine.generate_native_batch if args.mode == "native" else engine.generate_batch
+    run = {"native": engine.generate_native_batch, "compressed": engine.generate_batch,
+           "working_set": engine.generate_context_batch}[args.mode]
     try:
         for name, prompts, expected in workloads(engine):
+            if args.case is not None and name != args.case:
+                continue
+            if args.mode == "working_set":
+                contexts = [as_context(engine, prompt) for prompt in prompts]
+                if [context.render() for context in contexts] != prompts:
+                    raise RuntimeError("context metadata changed a reference benchmark prompt")
+                prompts = contexts
             rounds = []
             errors = []
             for trial in range(-args.warmup, args.repeats):

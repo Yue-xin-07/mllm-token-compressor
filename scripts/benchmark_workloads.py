@@ -1,5 +1,6 @@
 """Deterministic input construction and GPU memory sampling for Step 4."""
 from os import getpid
+import re
 from threading import Event, Thread
 from uuid import uuid4
 
@@ -39,6 +40,20 @@ def workloads(adapter):
     engine = adapter.engine
     yield "single_32k", [sized_prompt(engine, 32768, image)], [32768]
     yield "mixed_2k_8k", [sized_prompt(engine, 2048), sized_prompt(engine, 8192, image)], [2048, 8192]
+
+
+def as_context(adapter, prompt):
+    from compressor.working_set import GUIContext, HistoryRecord, split_text
+
+    value = prompt["prompt"]
+    history = re.search(r"(?: x)+", value)
+    if history is None:
+        raise ValueError("expected the canonical synthetic context")
+    prefix = value[:history.start()]
+    suffix = value[history.end():]
+    return GUIContext(HistoryRecord("system", prefix, prompt.get("multi_modal_data", {}).get("image")),
+                      split_text(history.group(), adapter.engine.get_tokenizer(), "context-"),
+                      HistoryRecord("query", suffix), suffix)
 
 
 def measure(run, record_memory):

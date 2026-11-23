@@ -91,3 +91,5 @@
 ## GUI Agent 工作集
 
 - `compressor/working_set.py`：结构化文本和截图、确定性排序、依赖闭包与预算回退。
+- `compressor/context_submission.py`：估算视觉/文本成本，在计时区间执行筛选，验证真实预处理预算，再用原生 Qwen M-RoPE 和缓存分配。
+- `scripts/benchmark_e2e.py`：保留原始 32K 和混合用例，额外测量工作集策略。
