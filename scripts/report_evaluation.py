@@ -147,7 +147,19 @@ def accuracy(native, compressed):
         if name == "Overall" and len(keys) == count:
             overall_delta = y - x
     invalid = [sum(rows[key]["point"] is None for key in common) for rows in (a, b)]
-    lines += ["", f"Invalid outputs on paired samples, native {invalid[0]}, compressed {invalid[1]}.", ""]
+    lines += [
+        "",
+        f"Invalid outputs on paired samples, native {invalid[0]}, compressed {invalid[1]}. "
+        f"The prompt used an image cap of {config['image_max_pixels']:,} pixels and a "
+        f"{config['generation_max_tokens']}-token budget. Generation stops at the first closing "
+        "parenthesis, which can cut off verbose answers before the coordinates.",
+        "",
+        "The measured delta applies to this prompt and decoding protocol. The low absolute "
+        "scores and invalid-output counts limit broader grounding conclusions. Qwen's "
+        "[computer-use cookbook](https://github.com/QwenLM/Qwen2.5-VL/blob/main/cookbooks/computer_use.ipynb) "
+        "formats grounding answers as tool calls.",
+        "",
+    ]
     return lines, overall_delta
 
 

@@ -88,7 +88,7 @@ class CompressedEngine:
         request_id = str(uuid.uuid4())
         free_before = self._free_blocks()
         prepared = None
-        trace = []
+        steps_trace = []
         min_free = free_before
         try:
             prepared = self.prepare(prompt, request_id, min_ratio, max_ratio)
@@ -105,7 +105,7 @@ class CompressedEngine:
                     for result in results:
                         if result.request_id == request_id:
                             output = result
-                trace = bridge.trace
+                steps_trace = bridge.trace
             if output is None or not output.finished:
                 raise RuntimeError("request did not finish")
             return output
@@ -121,7 +121,7 @@ class CompressedEngine:
                 "free_blocks_after": self._free_blocks(),
                 "allocated_blocks_peak": free_before - min_free,
                 "block_size": self.engine.cache_config.block_size,
-                "trace": trace,
+                "trace": steps_trace,
             }
             prepared = None
 

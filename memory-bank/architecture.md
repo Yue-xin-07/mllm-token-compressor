@@ -2,15 +2,15 @@
 
 ## 当前阶段与项目规则
 
-- 当前已完成 Step 0–3，其中 Step 2 为单卡单请求首版，Step 3 为视觉注意力评分 Triton 加速。Step 4 自动化压测正在实测。
+- 当前已完成 Step 0–4 的实现与验收流程。Step 2 交付单请求首版，Step 3 完成 Triton 评分，Step 4 增加离线批量对照和评估报告。
 - `AGENTS.md`：Memory Bank 优先、单文件 300 行上限、算法 pytest 闭环、子步骤更新文档并提交 Git，以及 AutoDL SSH 说明。
 - `.gitignore`：排除缓存、虚拟环境、Notebook 检查点、模型权重、数据集和运行产物。
 - `.venv/`：Python 3.11；PyTorch 2.5.1+cu121、Transformers 4.51.3、vLLM 0.7.3、FlashAttention-2 2.8.3.post2 等隔离依赖。
 
 ## 记忆库与阶段文档
 
-- `memory-bank/implementation-plan.md`：Step 0–4 的任务和验收标准；Step 0–3 已验收，Step 4 记录端到端压测与报告的验收标准。
-- `memory-bank/progress.md`：当前状态、历史子步骤、测试依据、已知问题和下一阶段 Step 4 的任务。
+- `memory-bank/implementation-plan.md`：Step 0–4 的任务和验收标准；Step 0–4 已完成阶段验收，Step 4 记录量化目标的实测结果。
+- `memory-bank/progress.md`：当前状态、历史子步骤、测试依据、已知问题与 Step 4 的实测记录。
 - `memory-bank/architecture.md`：记录源码、测试、工具及各阶段变更的文件职责。
 - `memory-bank/tech-stack.md`：模型、推理引擎、算子工具、硬件约束及最终 TTFT/显存/准确率目标。
 - `memory-bank/.ipynb_checkpoints/`：Notebook 历史自动保存副本；当前状态以根目录正式文档为准，不同步改写历史副本。
@@ -86,3 +86,4 @@
 - `scripts/report_evaluation.py`：校验双端配置，汇总逐轮性能与逐样本精度，计算目标达成状态并生成 Markdown 报告。
 - `tests/test_screenspot_metrics.py`：验证坐标变换、边界、越界及无效输出判分。
 - 32K 对照给两端配置相同的 2,114 个 16 Token KV 块，PyTorch 分配器启用可扩展 CUDA 段。
+- `evaluation_report.md`：正式评估报告，含目标判定、双端性能表、ScreenSpot 分组准确率和复现命令。原始 JSON 位于 AutoDL 的 `outputs/step4/`。
