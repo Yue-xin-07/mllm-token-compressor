@@ -9,9 +9,9 @@
 
 ## 记忆库与阶段文档
 
-- `memory-bank/implementation-plan.md`：Step 0–4 的任务和验收标准；Step 0–2 已勾选，Step 2 明确受限首版及未验收的性能/精度目标。
-- `memory-bank/progress.md`：当前状态、历史子步骤、测试依据、已知问题和下一步 Step 3 的任务及验收目标。
-- `memory-bank/architecture.md`：逐项记录源码、测试、工具及文档职责；本次修正旧阶段描述并完成 Step 2 文件清单复核。
+- `memory-bank/implementation-plan.md`：Step 0–4 的任务和验收标准；Step 0–3 已验收，Step 4 记录端到端压测与报告的验收标准。
+- `memory-bank/progress.md`：当前状态、历史子步骤、测试依据、已知问题和下一阶段 Step 4 的任务。
+- `memory-bank/architecture.md`：记录源码、测试、工具及各阶段变更的文件职责。
 - `memory-bank/tech-stack.md`：模型、推理引擎、算子工具、硬件约束及最终 TTFT/显存/准确率目标。
 - `memory-bank/.ipynb_checkpoints/`：Notebook 历史自动保存副本；当前状态以根目录正式文档为准，不同步改写历史副本。
 
@@ -61,8 +61,14 @@
 
 ## Step 3 评分加速与验证
 
-- `compressor/triton_scoring.py`：融合 FP32 行归一化、Shannon 熵和视觉列部分归约，避免完整的归一化和熵中间张量。GPU 汇总部分归约，CPU 计算整数保留预算。
-- `compressor/scoring.py` 与 `compressor/prepared.py`：请求准备路径对支持的 CUDA sm80+、连续 FP32、64–2048 视觉 Token 的探针输出选用 Triton。预算逼近整数且动态比例可能影响取整时，使用 PyTorch 参考。空证据保留全部，非法注意力报错，稳定排序仍按原视觉索引打破同分。
-- `tests/test_triton_scoring.py`：覆盖 CUDA 数值与预算对照、空行、同分、非法权重、边界回退及请求准备路径。
-- `scripts/benchmark_compression.py`：比较一次注意力探针、PyTorch/Triton 评分和含评分剪枝。可通过 `--model` 添加真实模型请求准备、Prefill 与 Decode 的分段耗时。
+- `compressor/triton_scoring.py`（新增）：融合 FP32 行归一化、Shannon 熵和视觉列部分归约，避免完整的归一化和熵中间张量。GPU 汇总部分归约，CPU 计算整数保留预算。动态预算接近取整边界时回退到 PyTorch。
+- `compressor/scoring.py`（修改）：保留 PyTorch 参考实现，共用预算计算。对 CUDA sm80+ 上连续 FP32、64–2048 视觉 Token 的探针输出选择 Triton，其余输入使用 PyTorch。
+- `compressor/prepared.py`（修改）：在真实模型请求准备路径中将探针输出交给评分后端，并传入剪枝流程。
+- `compressor/token_pruner.py`（修改）：两个评分后端共用输入校验和剪枝逻辑，按原视觉索引打破同分，并依保留索引提取 embeddings 与 M-RoPE 坐标。
+- `tests/test_triton_scoring.py`（新增）：覆盖 CUDA 数值与预算对照、空行、同分、非法权重、边界回退及请求准备路径。
+- `scripts/benchmark_compression.py`（新增）：比较一次注意力探针、PyTorch/Triton 评分和含评分剪枝。可通过 `--model` 添加真实模型请求准备、Prefill 与 Decode 的分段耗时。
+- `scripts/run_compressed.py`（修改）：提取 `make_prompt`，供离线运行入口和真实模型分段基准复用同一合成图文输入。
+- `memory-bank/implementation-plan.md`（修改）：勾选 Step 3，记录评分速度与回归验收结果。
+- `memory-bank/progress.md`（修改）：记录 Step 3 基准、验证和交付，并列出 Step 4 工作。
+- `memory-bank/architecture.md`（修改）：更新当前阶段，登记 Step 3 全部变更文件及其职责。
 - Step 3 验收为 91 passed，其中包含 6 项真实模型回归。RTX 4090 四组合成输入的评分耗时下降 69.7%–94.8%。端到端对照、32K、多请求、显存和精度评估归 Step 4。

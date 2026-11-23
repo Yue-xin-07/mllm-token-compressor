@@ -11,10 +11,11 @@
   - Step 1 基线已完成：新增注意力评分、熵驱动预算、确定性视觉 Token 剪枝与原始 M-RoPE 坐标对齐；完整单测 48 passed。
   - Step 1 算法及验收已提交：afc6292（评分预算）、98c0980（剪枝与位置对齐）、d57842c（GPU 验收）。
   - Step 2 已完成并提交：3123725（注意力探针）、8af46fa（请求准备）、6a63a76（vLLM 接入与缓存生命周期）；常规测试 72 passed，真实模型测试 6 passed。
+  - Step 3 已完成：7a84a3f（CUDA 基准）、01fb438（Triton 评分融合与接入）。RTX 4090 四组合成用例的评分耗时下降 69.7%–94.8%，均达到至少 20% 的验收标准。
 - **当前正在进行的任务**:
   - 无。
 - **下一步**:
-  - **Step 4：自动化压测、显存监控与指标产出**。建立 32K、混合并发与原生模型对照，记录 TTFT、峰值显存、吞吐和下游精度。
+  - **Step 4：自动化压测、显存监控与指标产出**。建立 32K、混合并发与原生模型对照，记录 TTFT、峰值显存、吞吐和下游精度，输出 `evaluation_report.md`。
 - **已知阻碍/验证记录**:
   - AutoDL 驱动 595.71.05 报告 CUDA 13.2；PyTorch CUDA 12.1 runtime 已验证正常。
   - 首次模型冒烟检查因隔离环境缺少 setuptools 失败；安装 setuptools 80.10.2 后重跑成功。
@@ -70,3 +71,7 @@
   - 真实模型 5687→5671 Token，3 次热请求的中位数为请求准备 80.53 ms、Prefill 步 530.38 ms、后续 7 步 Decode 合计 136.77 ms。该记录用于定位阶段耗时；端到端前后对照归 Step 4。
   - 复现：`.venv/bin/python scripts/benchmark_compression.py --warmup 10 --repeats 50 --model /root/autodl-tmp/models/Qwen2.5-VL-7B-Instruct`。
   - `MLLM_RUN_INTEGRATION=1 .venv/bin/python -m pytest tests/ -q`：91 passed，含 13 项新增评分/接入测试和 6 项真实模型回归。
+
+- **Step 3 交付复核（2026-11-23）**：
+  - 对照 ac93aa0..01fb438 逐项核查 10 个新增或修改文件，补全 architecture.md 文件清单，确认文件行数与 Git diff 格式检查通过。
+  - 在 AutoDL 重新运行 `MLLM_RUN_INTEGRATION=1 .venv/bin/python -m pytest tests/ -q`，91 项全部通过，包含 6 项真实模型回归。
