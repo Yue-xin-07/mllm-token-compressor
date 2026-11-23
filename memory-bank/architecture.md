@@ -93,3 +93,5 @@
 - `compressor/working_set.py`：结构化文本和截图、确定性排序、依赖闭包与预算回退。
 - `compressor/context_submission.py`：估算视觉/文本成本，在计时区间执行筛选，验证真实预处理预算，再用原生 Qwen M-RoPE 和缓存分配。
 - `scripts/benchmark_e2e.py`：保留原始 32K 和混合用例，额外测量工作集策略。
+- `scripts/gui_protocol.py` 和 `scripts/evaluate_gui.py`：共享工具坐标前缀，以模型缩放后的像素空间解码、映射至原图，写出可续跑的 ScreenSpot 逐样本结果。
+- `scripts/gui_replay.py` 和 `scripts/evaluate_gui_replay.py`：真实截图加模拟任务记录，按截图分离开发集与留出集，六种策略共用证据与点击判分。
