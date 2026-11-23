@@ -2,7 +2,7 @@
 
 ## 当前阶段与项目规则
 
-- 当前已完成 Step 0–3，其中 Step 2 为单卡单请求首版，Step 3 为视觉注意力评分 Triton 加速。下一阶段为 Step 4 自动化压测。
+- 当前已完成 Step 0–3，其中 Step 2 为单卡单请求首版，Step 3 为视觉注意力评分 Triton 加速。Step 4 自动化压测正在实测。
 - `AGENTS.md`：Memory Bank 优先、单文件 300 行上限、算法 pytest 闭环、子步骤更新文档并提交 Git，以及 AutoDL SSH 说明。
 - `.gitignore`：排除缓存、虚拟环境、Notebook 检查点、模型权重、数据集和运行产物。
 - `.venv/`：Python 3.11；PyTorch 2.5.1+cu121、Transformers 4.51.3、vLLM 0.7.3、FlashAttention-2 2.8.3.post2 等隔离依赖。
@@ -72,3 +72,13 @@
 - `memory-bank/progress.md`（修改）：记录 Step 3 基准、验证和交付，并列出 Step 4 工作。
 - `memory-bank/architecture.md`（修改）：更新当前阶段，登记 Step 3 全部变更文件及其职责。
 - Step 3 验收为 91 passed，其中包含 6 项真实模型回归。RTX 4090 四组合成输入的评分耗时下降 69.7%–94.8%。端到端对照、32K、多请求、显存和精度评估归 Step 4。
+
+
+## Step 4 自动化压测
+
+- `compressor/vllm_engine.py`：增加原生/压缩批量入口，共用同配置的 vLLM 0.7.3 V0 引擎。批量入口接受累积输出模式，单请求入口默认行为保留。
+- `compressor/vllm_bridge.py`：按序列组顺序拼接压缩 Prefill 的 embeddings 与 M-RoPE 位置，保留原生缓存元数据，完成 Prefill 后释放准备数据。仅接入无 chunked prefill 的默认 V0 调度。
+- `compressor/vllm_workload.py`：提交整批、记录首输出 Token、在调度阶段采集 KV 峰值、记录实际批大小。发生抢占时中止该轮并恢复调度钩子与缓存。
+- `compressor/vllm_compat.py`：对图像限额配置临时修正启动探针中的额外图像占位符，原生和压缩使用该同一兼容路径。
+- `scripts/benchmark_e2e.py` 与 `scripts/benchmark_workloads.py`：构造精确的预处理长度，独立进程运行双后端，写逐轮结果及错误，采样 NVML 和 PyTorch 显存。
+- `tests/test_vllm_workload.py` 及桥接、兼容与真实模型回归：覆盖首 Token 计时、KV 采样时点、批内对齐、启动探针、全保留输出与异常恢复。

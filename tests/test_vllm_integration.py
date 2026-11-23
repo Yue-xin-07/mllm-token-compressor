@@ -13,7 +13,8 @@ pytestmark = pytest.mark.skipif(
 @pytest.fixture(scope="module")
 def adapter():
     from compressor.vllm_engine import CompressedEngine
-    engine = CompressedEngine("/root/autodl-tmp/models/Qwen2.5-VL-7B-Instruct", 8192)
+    engine = CompressedEngine("/root/autodl-tmp/models/Qwen2.5-VL-7B-Instruct",
+                              8192, max_num_seqs=2)
     yield engine
     engine.close()
 
@@ -139,3 +140,29 @@ def test_video(adapter):
     assert output.finished
     assert 0 < adapter.last_stats["visual_after"] < adapter.last_stats["visual_before"]
     validate_stats(adapter.last_stats, 4)
+
+
+def test_batch_keep_all_and_failure_recovery(adapter):
+    mixed = [prompt(repeats=12), "<|im_start|>user\nSay OK.<|im_end|>\n<|im_start|>assistant\n"]
+    sampling = params(2)
+    baseline, native_stats = adapter.generate_native_batch(mixed, sampling)
+    free = adapter._free_blocks()
+    original = adapter.model.forward
+
+    def fail(*args, **kwargs):
+        raise RuntimeError("injected batch forward failure")
+
+    adapter.model.forward = fail
+    try:
+        with pytest.raises(RuntimeError, match="injected batch forward failure"):
+            adapter.generate_batch(mixed, sampling)
+        assert adapter.model.forward is fail
+        assert adapter._free_blocks() == free
+        assert not adapter.engine.has_unfinished_requests()
+    finally:
+        adapter.model.forward = original
+    kept, stats = adapter.generate_batch(mixed, sampling, 1., 1.)
+    assert native_stats["max_scheduled_requests"] == stats["max_scheduled_requests"] == 2
+    assert native_stats["kv_peak_blocks"] == stats["kv_peak_blocks"]
+    assert [r.outputs[0].token_ids for r in kept] == [r.outputs[0].token_ids for r in baseline]
+    assert adapter._free_blocks() == free

@@ -5,10 +5,13 @@ import uuid
 import torch
 from .prepared import prepare_request
 from .vllm_bridge import RunnerBridge
+from .vllm_workload import run_workload
 
 
 class CompressedEngine:
-    def __init__(self, model_path, max_model_len=8192, gpu_memory_utilization=.85):
+    def __init__(self, model_path, max_model_len=8192, gpu_memory_utilization=.85,
+                 *, max_num_seqs=1, max_image_pixels=None):
+        self.max_num_seqs = max_num_seqs
         os.environ["VLLM_USE_V1"] = "0"
         os.environ["VLLM_WORKER_MULTIPROC_METHOD"] = "spawn"
         import vllm
@@ -17,16 +20,29 @@ class CompressedEngine:
             raise RuntimeError("adapter requires vLLM 0.7.3")
         args = EngineArgs(
             model=model_path, dtype="bfloat16", enforce_eager=True,
-            max_model_len=max_model_len, max_num_seqs=1,
+            max_model_len=max_model_len, max_num_seqs=max_num_seqs,
             max_num_batched_tokens=max_model_len,
             enable_prefix_caching=False, enable_chunked_prefill=False,
             num_scheduler_steps=1, swap_space=0,
             gpu_memory_utilization=gpu_memory_utilization,
             distributed_executor_backend="uni", disable_async_output_proc=True,
-            limit_mm_per_prompt={"image": 2, "video": 1})
-        from .vllm_compat import install_vision_rotary_compat
+            disable_mm_preprocessor_cache=max_image_pixels is not None,
+            limit_mm_per_prompt=({"image": 1, "video": 0} if max_image_pixels else
+                                 {"image": 2, "video": 1}),
+            mm_processor_kwargs={"max_pixels": max_image_pixels} if max_image_pixels else None)
+        from .vllm_compat import install_image_profile_compat, install_vision_rotary_compat
         self.restore_compat = install_vision_rotary_compat()
-        self.engine = LLMEngine.from_engine_args(args)
+        restore_profile = install_image_profile_compat() if max_image_pixels else None
+        try:
+            self.engine = LLMEngine.from_engine_args(args)
+        except BaseException:
+            self.restore_compat()
+            if torch.distributed.is_initialized():
+                torch.distributed.destroy_process_group()
+            raise
+        finally:
+            if restore_profile is not None:
+                restore_profile()
         self.runner = self.engine.model_executor.driver_worker.worker.model_runner
         self.model = self.runner.model
         self.last_stats = {}
@@ -61,7 +77,7 @@ class CompressedEngine:
     def _free_blocks(self):
         return self.engine.scheduler[0].block_manager.get_num_free_gpu_blocks()
 
-    def generate(self, prompt, sampling_params, min_ratio=.25, max_ratio=.75):
+    def generate(self, prompt, sampling_params, min_ratio=.25, max_ratio=.75, *, trace=True):
         from vllm.inputs import token_inputs
         if self.engine.has_unfinished_requests():
             raise RuntimeError("adapter requires an idle single-request engine")
@@ -81,7 +97,7 @@ class CompressedEngine:
             for seq in group.get_seqs():
                 seq.data.mrope_position_delta = prepared.rope_delta
             output = None
-            with RunnerBridge(self.runner, prepared) as bridge:
+            with RunnerBridge(self.runner, prepared, trace=trace) as bridge:
                 while self.engine.has_unfinished_requests():
                     results = self.engine.step()
                     min_free = min(min_free, self._free_blocks())
@@ -107,6 +123,56 @@ class CompressedEngine:
                 "trace": trace,
             }
             prepared = None
+
+    def generate_batch(self, prompts, sampling_params, min_ratio=.25, max_ratio=.75):
+        return self._run_batch(prompts, sampling_params, (min_ratio, max_ratio))
+
+    def generate_native_batch(self, prompts, sampling_params):
+        return self._run_batch(prompts, sampling_params, None)
+
+    def _run_batch(self, prompts, sampling, ratios):
+        from contextlib import nullcontext
+        from vllm.inputs import token_inputs
+        from vllm.sampling_params import RequestOutputKind
+
+        if not 0 < len(prompts) <= self.max_num_seqs:
+            raise ValueError("batch size must be between one and max_num_seqs")
+        if (sampling.n != 1 or sampling.best_of not in (None, 1)
+                or sampling.prompt_logprobs is not None):
+            raise ValueError("only n=1, best_of=1, no prompt_logprobs supported")
+        if sampling.output_kind != RequestOutputKind.CUMULATIVE:
+            raise ValueError("batch measurement requires cumulative outputs")
+        requests = {}
+        lengths = {}
+        compressed = ratios is not None
+
+        def submit(request_id, prompt):
+            if not compressed:
+                self.engine.add_request(request_id, prompt, sampling)
+                return
+            prepared = self.prepare(prompt, request_id, *ratios)
+            group = self.engine._add_processed_request(
+                request_id, token_inputs(prepared.token_ids), sampling,
+                time.time(), None, None)
+            for seq in group.get_seqs():
+                seq.data.mrope_position_delta = prepared.rope_delta
+            requests[request_id] = prepared
+            lengths[request_id] = (prepared.original_length, prepared.visual_before,
+                                   prepared.visual_after)
+
+        cache = self.engine.cache_config
+        block_bytes = self.engine.model_executor.driver_worker.worker.get_cache_block_size_bytes()
+        bridge = (RunnerBridge(self.runner, requests=requests, trace=False)
+                  if compressed else nullcontext())
+        with bridge:
+            results, stats = run_workload(self.engine, prompts, submit, lengths, block_bytes,
+                                          cache.num_gpu_blocks)
+        if not compressed:
+            vision_ids = {self.model.config.image_token_id, self.model.config.video_token_id}
+            for result, row in zip(results, stats["requests"], strict=True):
+                count = sum(token_id in vision_ids for token_id in result.prompt_token_ids)
+                row.update(visual_tokens=count, retained_visual_tokens=count)
+        return results, stats
 
     def close(self):
         """Release the sole engine and restore process-local compatibility."""

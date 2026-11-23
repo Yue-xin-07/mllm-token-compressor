@@ -55,3 +55,26 @@ def test_exception_restores_hooks():
         with RunnerBridge(runner, prepared):
             runner.execute_model(inp)
     assert runner.execute_model is original
+
+
+def test_batched_prefill_uses_scheduler_order_and_releases_prepared_requests():
+    runner, first, calls, inp = setup()
+    second = PreparedRequest([3], torch.ones(1, 4), torch.full((3, 1), 17),
+                             torch.tensor([0]), 1, 18, 0, 0)
+    seq = SimpleNamespace(get_num_computed_tokens=lambda: 0, get_output_len=lambda: 0)
+    runner.prepare_model_input = lambda _: inp
+    original = runner.prepare_model_input
+    groups = [SimpleNamespace(is_prompt=True, request_id=key, seq_data={0: seq})
+              for key in ("second", "first")]
+    requests = {"first": first, "second": second}
+    inp.attn_metadata.num_prefills = 2
+    inp.input_tokens = torch.tensor([3, 1, 2])
+    with RunnerBridge(runner, requests=requests, trace=False) as bridge:
+        runner.execute_model(runner.prepare_model_input(groups))
+        torch.testing.assert_close(calls[-1]["inputs_embeds"],
+                                   torch.cat([second.embeddings, first.embeddings]))
+        torch.testing.assert_close(calls[-1]["positions"],
+                                   torch.cat([second.positions, first.positions], dim=-1))
+        assert bridge.trace == []
+        assert requests == {}
+    assert runner.prepare_model_input is original
