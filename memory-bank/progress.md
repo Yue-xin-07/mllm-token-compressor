@@ -56,3 +56,5 @@
   - 修正 architecture.md 开头遗留的 Step 1/Step 2 阶段描述，逐项记录本阶段文件职责；当前为 Step 2 受限首版完成，下一步 Step 3 尚未开始。
   - 本次仅更新 progress.md 与 architecture.md，沿用此前 72 项常规测试和 6 项真实模型验收记录，未重新运行模型或测试。
   - 提交信息采用 Conventional Commits；交付文档提交后，将连同 3 个 Step 2 实现提交推送至 origin/main。
+
+- **Step 3.1 基线测量**：在 RTX 4090 上以 Qwen2.5-VL 形状的 BF16 合成 Q/K 和 FP32 注意力计时。20 次同步测量的中位数显示，5623 文本 query、64 视觉 Token 时探针/评分分别为 13.2482/0.9623 ms；2048 query、1024 视觉 Token 时分别为 5.0503/7.8544 ms。先融合 GPU 评分中的行归一化、熵和列汇总，保留探针和稳定排序。
