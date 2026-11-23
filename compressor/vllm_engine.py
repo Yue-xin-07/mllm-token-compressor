@@ -10,7 +10,7 @@ from .vllm_workload import run_workload
 
 class CompressedEngine:
     def __init__(self, model_path, max_model_len=8192, gpu_memory_utilization=.85,
-                 *, max_num_seqs=1, max_image_pixels=None):
+                 *, max_num_seqs=1, max_image_pixels=None, cache_blocks=None):
         self.max_num_seqs = max_num_seqs
         os.environ["VLLM_USE_V1"] = "0"
         os.environ["VLLM_WORKER_MULTIPROC_METHOD"] = "spawn"
@@ -23,7 +23,8 @@ class CompressedEngine:
             max_model_len=max_model_len, max_num_seqs=max_num_seqs,
             max_num_batched_tokens=max_model_len,
             enable_prefix_caching=False, enable_chunked_prefill=False,
-            num_scheduler_steps=1, swap_space=0,
+            num_scheduler_steps=1, swap_space=0, block_size=16,
+            num_gpu_blocks_override=cache_blocks,
             gpu_memory_utilization=gpu_memory_utilization,
             distributed_executor_backend="uni", disable_async_output_proc=True,
             disable_mm_preprocessor_cache=max_image_pixels is not None,

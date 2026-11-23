@@ -59,6 +59,8 @@ def performance(native, compressed):
         f"Each backend ran in a fresh process with {config['warmup']} warm-up rounds "
         f"and {config['repeats']} measured rounds per workload. Image cap "
         f"{config['max_image_pixels']:,} pixels. Each response was fixed to 32 tokens.",
+        f"The two backends share a {config.get('kv_pool_blocks', 'profile-sized')}-block KV pool "
+        f"and allocator configuration `{config.get('cuda_allocator', 'default')}`.",
         "The synthetic long inputs use repeated text and one 448×448 image. The mixed workload "
         "submits a 2K text request and an 8K image request in the same scheduling round.",
         "",

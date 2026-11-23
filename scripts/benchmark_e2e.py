@@ -2,18 +2,20 @@
 import argparse
 from functools import partial
 import json
+import os
 from pathlib import Path
 import sys
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from benchmark_workloads import measure, workloads
-from compressor.vllm_engine import CompressedEngine
 
 
 MODEL = "/root/autodl-tmp/models/Qwen2.5-VL-7B-Instruct"
 MAX_MODEL_LEN = 32800
 MAX_IMAGE_PIXELS = 448 * 448
+# 2050 blocks for the longest request plus scheduler watermark and headroom.
+CACHE_BLOCKS = 2114
 
 
 def main():
@@ -28,6 +30,8 @@ def main():
     if args.warmup < 0 or args.repeats < 1:
         parser.error("warmup must be nonnegative and repeats must be positive")
 
+    os.environ.setdefault("PYTORCH_CUDA_ALLOC_CONF", "expandable_segments:True")
+    from compressor.vllm_engine import CompressedEngine
     from vllm import SamplingParams, __version__ as vllm_version
     import torch
 
@@ -36,6 +40,8 @@ def main():
         "max_model_len": MAX_MODEL_LEN,
         "max_num_seqs": 2,
         "max_image_pixels": MAX_IMAGE_PIXELS,
+        "kv_pool_blocks": CACHE_BLOCKS,
+        "cuda_allocator": os.environ["PYTORCH_CUDA_ALLOC_CONF"],
         "warmup": args.warmup,
         "repeats": args.repeats,
         "gpu": torch.cuda.get_device_name(),
@@ -50,7 +56,7 @@ def main():
     args.output.parent.mkdir(parents=True, exist_ok=True)
     engine = CompressedEngine(args.model, MAX_MODEL_LEN,
                               args.gpu_memory_utilization, max_num_seqs=2,
-                              max_image_pixels=MAX_IMAGE_PIXELS)
+                              max_image_pixels=MAX_IMAGE_PIXELS, cache_blocks=CACHE_BLOCKS)
     run = engine.generate_native_batch if args.mode == "native" else engine.generate_batch
     try:
         for name, prompts, expected in workloads(engine):
@@ -68,6 +74,8 @@ def main():
                     errors.append({"round": trial, "error": str(error)})
                     if engine.engine.has_unfinished_requests():
                         raise
+                    if trial < 0:
+                        break
                 else:
                     if trial >= 0:
                         rounds.append(stats)

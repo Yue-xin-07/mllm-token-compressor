@@ -85,3 +85,4 @@
 - `scripts/evaluate_screenspot.py` 与 `scripts/screenspot_metrics.py`：加载 SeeClick 原版三组标注与图像，使用统一的归一化坐标提示和确定性生成，按点击是否落入标注框判分。批次可从同配置的输出恢复。
 - `scripts/report_evaluation.py`：校验双端配置，汇总逐轮性能与逐样本精度，计算目标达成状态并生成 Markdown 报告。
 - `tests/test_screenspot_metrics.py`：验证坐标变换、边界、越界及无效输出判分。
+- 32K 对照给两端配置相同的 2,114 个 16 Token KV 块，PyTorch 分配器启用可扩展 CUDA 段。
