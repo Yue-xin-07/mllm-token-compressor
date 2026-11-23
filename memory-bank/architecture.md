@@ -2,15 +2,15 @@
 
 ## 当前阶段与项目规则
 
-- 当前已完成 Step 0–4 的实现与验收流程。Step 2 交付单请求首版，Step 3 完成 Triton 评分，Step 4 增加离线批量对照和评估报告。
-- `AGENTS.md`：Memory Bank 优先、单文件 300 行上限、算法 pytest 闭环、子步骤更新文档并提交 Git，以及 AutoDL SSH 说明。
+- 当前已完成 Step 0–5。Step 4 交付视觉压缩基线与端到端评估，Step 5 增加 Prefill 前的 GUI Agent 工作集。
+- `AGENTS.md`：Memory Bank 优先、单文件 300 行上限、算法 pytest 闭环、子步骤更新文档并提交 Git、研究与算法设计规范，以及 AutoDL SSH 说明。
 - `.gitignore`：排除缓存、虚拟环境、Notebook 检查点、模型权重、数据集和运行产物。
 - `.venv/`：Python 3.11；PyTorch 2.5.1+cu121、Transformers 4.51.3、vLLM 0.7.3、FlashAttention-2 2.8.3.post2 等隔离依赖。
 
 ## 记忆库与阶段文档
 
-- `memory-bank/implementation-plan.md`：Step 0–4 的任务和验收标准；Step 0–4 已完成阶段验收，Step 4 记录量化目标的实测结果。
-- `memory-bank/progress.md`：当前状态、历史子步骤、测试依据、已知问题与 Step 4 的实测记录。
+- `memory-bank/implementation-plan.md`：Step 0–5 的任务及验收标准，包含视觉基线和工作集的量化结果。
+- `memory-bank/progress.md`：记录已完成的阶段、测试和评估依据、局限及下一步。
 - `memory-bank/architecture.md`：记录源码、测试、工具及各阶段变更的文件职责。
 - `memory-bank/tech-stack.md`：模型、推理引擎、算子工具、硬件约束及最终 TTFT/显存/准确率目标。
 - `memory-bank/.ipynb_checkpoints/`：Notebook 历史自动保存副本；当前状态以根目录正式文档为准，不同步改写历史副本。
@@ -76,26 +76,44 @@
 
 ## Step 4 自动化压测
 
+- `scripts/__init__.py`：将 CLI 及可共享的评估工具标记为 Python 包，支持测试和脚本统一导入。
+
 - `compressor/vllm_engine.py`：增加原生/压缩批量入口，共用同配置的 vLLM 0.7.3 V0 引擎。批量入口接受累积输出模式，单请求入口默认行为保留。
 - `compressor/vllm_bridge.py`：按序列组顺序拼接压缩 Prefill 的 embeddings 与 M-RoPE 位置，保留原生缓存元数据，完成 Prefill 后释放准备数据。仅接入无 chunked prefill 的默认 V0 调度。
 - `compressor/vllm_workload.py`：提交整批、记录首输出 Token、在调度阶段采集 KV 峰值、记录实际批大小。发生抢占时中止该轮并恢复调度钩子与缓存。
 - `compressor/vllm_compat.py`：对图像限额配置临时修正启动探针中的额外图像占位符，原生和压缩使用该同一兼容路径。
 - `scripts/benchmark_e2e.py` 与 `scripts/benchmark_workloads.py`：构造精确的预处理长度，独立进程运行双后端，写逐轮结果及错误，分别采样 NVML 设备与进程显存、PyTorch 分配和保留峰值。
-- `tests/test_vllm_workload.py` 及桥接、兼容与真实模型回归：覆盖首 Token 计时、KV 采样时点、批内对齐、启动探针、全保留输出与异常恢复。
-- `scripts/evaluate_screenspot.py` 与 `scripts/screenspot_metrics.py`：加载 SeeClick 原版三组标注与图像，使用统一的归一化坐标提示和确定性生成，按点击是否落入标注框判分。批次可从同配置的输出恢复。
+- `tests/test_vllm_workload.py`：验证首 Token 计时、释放前采集 KV 峰值和请求抢占清理。
+- `tests/test_vllm_bridge.py`：验证批内请求顺序、位置和 embeddings 对齐，以及钩子恢复。
+- `tests/test_vllm_compat.py`：验证启动探针图像占位符修正、视觉旋转结果及兼容钩子恢复。
+- `tests/test_vllm_integration.py`：验证真实模型批量全保留对照、缓存回收和异常恢复。
+- `scripts/evaluate_screenspot.py`：执行 Step 4 原生与视觉剪枝的 ScreenSpot 基线对照，支持断点续跑。
+- `scripts/screenspot_metrics.py`：读取 SeeClick 原版标注和图片，计算标注指纹并提供 Step 4 的坐标判分。
 - `scripts/report_evaluation.py`：校验双端配置，汇总逐轮性能与逐样本精度，计算目标达成状态并生成 Markdown 报告。
 - `tests/test_screenspot_metrics.py`：验证坐标变换、边界、越界及无效输出判分。
 - 32K 对照给两端配置相同的 2,114 个 16 Token KV 块，PyTorch 分配器启用可扩展 CUDA 段。
 - `evaluation_report.md`：正式评估报告，含目标判定、双端性能表、ScreenSpot 分组准确率和复现命令。原始 JSON 位于 AutoDL 的 `outputs/step4/`。
 
-## GUI Agent 工作集
+## Step 5 GUI Agent 工作集
 
-- `compressor/working_set.py`：结构化文本和截图、确定性排序、依赖闭包与预算回退。
-- `compressor/context_submission.py`：估算视觉/文本成本，在计时区间执行筛选，验证真实预处理预算，再用原生 Qwen M-RoPE 和缓存分配。
-- `scripts/benchmark_e2e.py`：保留原始 32K 和混合用例，额外测量工作集策略。
-- `scripts/gui_protocol.py` 和 `scripts/evaluate_gui.py`：共享工具坐标前缀，以模型缩放后的像素空间解码、映射至原图，写出可续跑的 ScreenSpot 逐样本结果。
-- `scripts/gui_replay.py` 和 `scripts/evaluate_gui_replay.py`：真实截图加模拟任务记录，按截图分离开发集与留出集，六种策略共用证据与点击判分。
-
-- `scripts/report_gui.py` 和 `scripts/gui_figures.py`：核对成对数据，生成性能图、点击回放、质量和消融表。
-- `scripts/reproduce_gui.sh`：依次复跑冻结的像素点击协议、正式性能与留出回放。
-- `docs/gui-evaluation.md` 与 `docs/gui-replay.md`：GUI 结果与示例。原视觉压缩报告仍记录 Step 4 基线。
+- `compressor/working_set.py`：定义历史记录和截图边界，按预算执行依赖闭包、近期与 BM25 筛选，并按原序渲染。
+- `compressor/context_submission.py`：估算文本与视觉 Token，校验压缩后的实际输入长度，通过原生 Qwen/vLLM 路径提交，记录筛选成本与回退原因。
+- `compressor/vllm_engine.py`：增加 `generate_context_batch`、受控的多图数量和工作集统计，复用现有批量计时。
+- `scripts/benchmark_e2e.py`：增加工作集运行模式与单用例选项，沿用独立进程的冷请求对照。
+- `scripts/benchmark_workloads.py`：为原始合成负载生成结构化侧车数据，保留原生请求的文本、截图与长度。
+- `scripts/gui_protocol.py`：生成 Qwen 工具调用前缀、解析点击和边框，将缩放图坐标映射回原图并判分。
+- `scripts/evaluate_gui.py`：以冻结的像素点击协议运行完整 ScreenSpot 配对评估，保留可续跑的逐样本记录。
+- `scripts/gui_replay.py`：用真实截图与带依赖标注的模拟历史构造 GUI 回放。
+- `scripts/evaluate_gui_replay.py`：按截图划分开发与留出样本，对照原生、视觉剪枝、近期、BM25、工作集与 Oracle。
+- `scripts/gui_figures.py`：根据实测数据绘制性能对照图并标注回放点击，生成 PNG。
+- `scripts/report_gui.py`：校验双端配置与样本配对，汇总性能、准确率、Bootstrap 区间和消融结果。
+- `scripts/reproduce_gui.sh`：串联正式性能压测、完整 ScreenSpot 像素点击评估、留出回放和报告生成。
+- `tests/test_working_set.py`：覆盖预算、排序、引用依赖、原序、截图占位与回退。
+- `tests/test_gui_protocol.py`：覆盖工具输出解析、像素缩放、边界和无效坐标。
+- `tests/test_gui_replay.py`：核对真实截图对应关系与回放中标注证据、当前问题的分离。
+- `tests/test_vllm_integration.py`：增加真实模型下丢弃旧图、紧凑请求与原生输出一致及缺失引用回退的验证。
+- `README.md`：项目入口，解释选择机制、实验结果与 AutoDL 复跑方式。
+- `docs/gui-evaluation.md`：记录 32K 和双请求性能、ScreenSpot 配对评估与六路径回放消融。
+- `docs/gui-performance.png`：展示 32K TTFT p50 与实际峰值 KV 对照。
+- `docs/gui-replay.md`：记录示例任务、所保留历史证据和预测点击。
+- `docs/gui-replay.png`：显示示例回放的原截图、目标框与预测点击。
