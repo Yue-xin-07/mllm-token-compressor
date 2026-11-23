@@ -10,12 +10,13 @@
   - 运行 `python scripts/check_env.py` 通过：检测到 CUDA 12.1 与 RTX 4090；5 个权重分片以 BF16 加载，短文本生成返回 `OK`。
   - Step 1 基线已完成：新增注意力评分、熵驱动预算、确定性视觉 Token 剪枝与原始 M-RoPE 坐标对齐；完整单测 48 passed。
   - Step 1 算法及验收已提交：afc6292（评分预算）、98c0980（剪枝与位置对齐）、d57842c（GPU 验收）。
+  - Step 2 已完成并提交：3123725（注意力探针）、8af46fa（请求准备）、6a63a76（vLLM 接入与缓存生命周期）；常规测试 72 passed，真实模型测试 6 passed。
 - **当前正在进行的任务**:
   - 无。
 - **下一步**:
   - **Step 3：Triton 自定义算子加速核心瓶颈**。
   - 先测量 Step 2 注意力探针、评分及筛选开销，再确定融合算子边界。
-  - 保持 PyTorch 参考实现与确定性语义，新增算子测试；目标相对 PyTorch 提速 ≥20%。
+  - 保持 PyTorch 参考实现与确定性语义，新增算子测试及 GPU 数值对照；在明确输入规模和计时方法后，验收所选算子相对 PyTorch 提速 ≥20%。
   - 多请求调度、32K 端到端及最终性能/精度不属于已完成的 Step 2 首版验收。
 - **已知阻碍/验证记录**:
   - AutoDL 驱动 595.71.05 报告 CUDA 13.2；PyTorch CUDA 12.1 runtime 已验证正常。
@@ -48,3 +49,10 @@
   - 长输入 5687→5671，视觉 Token 64→48；40 步生成，块峰值 358→357（16 Token/块），空闲块前后均 3736。
   - docs/step2-integration.md 与 docs/step2-validation.json 记录运行方式、边界和验收；git diff --check 与文件行数检查通过。
   - 未证明 TTFT、32K、全局 KV pool 预留显存缩减或下游准确率达标。
+
+
+- **Step 2 交付复核（2026-11-23）**：
+  - 对照 8a590c6..6a63a76 核查全部 16 个新增/修改文件，覆盖算法、请求准备、runner、兼容层、离线脚本、测试及文档。
+  - 修正 architecture.md 开头遗留的 Step 1/Step 2 阶段描述，逐项记录本阶段文件职责；当前为 Step 2 受限首版完成，下一步 Step 3 尚未开始。
+  - 本次仅更新 progress.md 与 architecture.md，沿用此前 72 项常规测试和 6 项真实模型验收记录，未重新运行模型或测试。
+  - 提交信息采用 Conventional Commits；交付文档提交后，将连同 3 个 Step 2 实现提交推送至 origin/main。

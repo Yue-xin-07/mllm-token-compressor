@@ -1,61 +1,66 @@
 # 架构与目录说明 (Architecture & File Manifest)
 
-## 项目规则与环境
+## 当前阶段与项目规则
 
-- `AGENTS.md`：开发规则、Memory Bank 优先读取、单文件 300 行上限、算法单测、子步骤文档更新与提交要求，以及 AutoDL SSH 连接说明。
-- `.gitignore`：排除缓存、虚拟环境、Notebook 检查点、模型权重、数据集及运行产物。
-- `.venv/`：隔离 Python 3.11 环境；PyTorch 2.5.1+cu121、Transformers 4.51.3、vLLM 0.7.3、FlashAttention-2 2.8.3.post2 等依赖。
+- 当前已完成 Step 0、Step 1 和 Step 2 单卡单请求首版；下一阶段为 Step 3：先定位评分/筛选瓶颈，再实现 Triton 融合算子。
+- `AGENTS.md`：Memory Bank 优先、单文件 300 行上限、算法 pytest 闭环、子步骤更新文档并提交 Git，以及 AutoDL SSH 说明。
+- `.gitignore`：排除缓存、虚拟环境、Notebook 检查点、模型权重、数据集和运行产物。
+- `.venv/`：Python 3.11；PyTorch 2.5.1+cu121、Transformers 4.51.3、vLLM 0.7.3、FlashAttention-2 2.8.3.post2 等隔离依赖。
 
-## 记忆库与阶段状态文件
+## 记忆库与阶段文档
 
-- `memory-bank/implementation-plan.md`：Step 0–4 的任务与验收标准；本阶段勾选 Step 1，记录 48 项测试通过及基线边界。
-- `memory-bank/progress.md`：当前进展、完成事项、测试和问题记录；本阶段记录 Step 1 完成与下一步 Step 2 的引擎集成任务。
-- `memory-bank/architecture.md`：文件功能清单、算法接口及后续集成约定；覆盖本阶段全部新增和修改文件。
-- `memory-bank/tech-stack.md`：目标模型、技术栈、硬件约束，以及最终延迟、显存和准确率目标。
-- `memory-bank/.ipynb_checkpoints/`：Notebook 自动保存的历史副本；阶段状态以目录根部正式文档为准。
+- `memory-bank/implementation-plan.md`：Step 0–4 的任务和验收标准；Step 0–2 已勾选，Step 2 明确受限首版及未验收的性能/精度目标。
+- `memory-bank/progress.md`：当前状态、历史子步骤、测试依据、已知问题和下一步 Step 3 的任务及验收目标。
+- `memory-bank/architecture.md`：逐项记录源码、测试、工具及文档职责；本次修正旧阶段描述并完成 Step 2 文件清单复核。
+- `memory-bank/tech-stack.md`：模型、推理引擎、算子工具、硬件约束及最终 TTFT/显存/准确率目标。
+- `memory-bank/.ipynb_checkpoints/`：Notebook 历史自动保存副本；当前状态以根目录正式文档为准，不同步改写历史副本。
 
 ## Step 0 环境工具
 
-- `scripts/check_env.py`：检查 Python、CUDA/GPU 和推理依赖，支持 Qwen2.5-VL 短文本生成冒烟验证。
-- `scripts/download_model.py`：下载或续传 Hugging Face 模型快照，支持自定义 endpoint 与禁用 Xet，默认保存至 AutoDL 数据盘。
+- `scripts/check_env.py`：检查 Python、CUDA/GPU 和推理依赖，支持模型加载及短文本生成冒烟验证。
+- `scripts/download_model.py`：下载/续传模型快照，支持镜像 endpoint、禁用 Xet 和数据盘存储路径。
 
-## Step 1 算法源码（新增）
+## Step 1 压缩算法基线
 
-- `compressor/__init__.py`：声明压缩算法 Python 包；具体接口从子模块导入。
-- `compressor/scoring.py`：定义 AttentionBudget 和 score_attention；接收浮点 [H,Q,V] 非负有限权重，按有效行归一化，输出 FP32 重要性、归一化行 Shannon 熵均值与动态保留数量；零行不参与统计，无有效证据时保留全部。
-- `compressor/token_pruner.py`：定义 TokenPruner 和 PruningResult；校验输入后稳定筛选视觉 Token、保留全部非视觉 Token，按原序列顺序 gather 隐藏状态与原始三轴 M-RoPE 坐标，返回保留索引、实际视觉预算、熵及原序列下一位置起点。
+- `compressor/__init__.py`：声明算法包，具体接口从子模块导入。
+- `compressor/scoring.py`：AttentionBudget、score_attention；对有效 [H,Q,V] 权重行归一化，计算 FP32 重要性、归一化行 Shannon 熵均值和视觉保留数量；无证据时保留全部。
+- `compressor/token_pruner.py`：TokenPruner、PruningResult；稳定筛选视觉 Token，保留非视觉 Token，原序 gather 隐藏状态与三轴位置，返回保留索引及原序列 next_position。
+- `tests/test_scoring.py`：预算、熵、归一化、空证据/非法输入和数值稳定性测试。
+- `tests/test_pruner.py`：确定性、索引/位置对齐、多视觉段、非连续张量、GPU 半精度对照及重复调用活跃显存回归。
+- Step 1 历史验收为 48 passed；真实注意力提取与引擎接入由 Step 2 完成。
 
-## Step 1 单元测试（新增）
+## Step 2 注意力与请求准备
 
-- `tests/test_scoring.py`：验证熵与预算关系、逐行归一化、零行忽略、空输入/无证据回退、非法权重/比例，以及大数值稳定性和推理模式。
-- `tests/test_pruner.py`：验证确定性排序、文本与索引/三轴坐标对齐、输入不变、空序列与非法输入、多视觉段及非连续张量、删除最大坐标后的生成起点；包含 RTX 4090 FP16/BF16 CPU/GPU 对照、混合设备拒绝和重复调用活跃显存回归。
-- 完整验收命令：`.venv/bin/python -m pytest tests/ -q -s`，48 passed；每个新增 Python 文件均少于 300 行。
+- `compressor/attention_probe.py`（新增）：旋转后的 Q/K 到 [H,Q,V] 条件视觉注意力；支持 GQA 头映射、按 query 分块、原序列因果掩码和空因果行归零。
+- `compressor/prepared.py`（新增并补充预算校验）：PreparedRequest 与 prepare_request；生成多模态 embeddings，取第一层归一化/QKV/M-RoPE 探针，构造文本 query/视觉掩码并复用剪枝；区分物理长度与解码位置偏移。
+- `tests/test_attention_probe.py`（新增）：完整注意力参考对照、GQA/分块组合、空证据、非法索引及 CUDA FP16/BF16 一致性。
+- `tests/test_prepared.py`（新增并补充非法预算回归）：保留索引、embeddings、三轴位置及 rope_delta 对齐；全保留、无文本证据、纯文本，以及模型访问前拒绝非法预算。
 
-## 算法接口与 Step 2 集成约定
+## Step 2 引擎与缓存接入
 
-- 单条无 padding 序列输入：隐藏状态 [S,D]、int64 原始位置 [3,S]、bool 视觉内容掩码 [S]、已应用有效位置/因果掩码的跨模态注意力 [H,Q,V]。V 列按原视觉 Token 顺序排列，特殊 Token 不得标入视觉掩码。
-- 默认视觉预算为 ceil(V × (0.25 + 0.50 × entropy))；有视觉 Token 时至少保留一个，无有效注意力则保留全部。此基线采用行 Shannon 熵均值，不是谱熵。
-- 推理模式计算，不保留请求张量；评分采用 FP32，同分时原索引较小者优先，输出保留原序列顺序。
-- next_position 为原始三轴位置最大值加一，空序列返回零；它不是物理 cache_position 或 Transformers rope_delta，不能按压缩长度重新生成视觉网格坐标。
-- Step 2 负责真实模型注意力提取、vLLM Prefill 接入、批次与序列元数据、后续解码位置、KV Cache 及 Block Table 适配。本阶段未验证长上下文端到端性能或下游任务精度。
+- `compressor/vllm_engine.py`（新增）：版本限定的 CompressedEngine；原生预处理、原始 M-RoPE、请求准备、压缩序列注册、解码偏移、原生块管理、诊断统计、异常 abort 及 close。
+- `compressor/vllm_bridge.py`（新增）：RunnerBridge 上下文钩子；Prefill 注入保留 embeddings/位置，保留原生注意力缓存元数据，采集每步位置/slot/Block Table，退出或异常时恢复钩子。
+- `compressor/vllm_compat.py`（新增）：torch 2.5 缺失 wrap_triton 时，使用 vLLM 自带视觉 rotary PyTorch 参考实现，返回恢复函数。
+- `scripts/run_compressed.py`（新增）：合成图像和长文本离线入口；支持全保留对照、输入/生成长度选项及 JSON 诊断输出，退出时关闭引擎。
+- `tests/test_vllm_bridge.py`（新增）：Prefill 注入、decode 路径、缓存元数据保持及异常钩子恢复。
+- `tests/test_vllm_compat.py`（新增）：视觉旋转参考实现数值一致性与兼容函数恢复。
+- `tests/test_vllm_integration.py`（新增）：显式启用的真实模型测试；覆盖原生/全保留对照、长输入跨块解码、纯文本、双图、视频、异常回收及恢复。
+- `docs/step2-integration.md`（新增）：适用范围、运行命令、接入流程、兼容原因、验收数据及未验证目标。
+- `docs/step2-validation.json`（新增）：可追溯验收摘要，包括输入/保留数量、缓存块对照、首末 decode 位置与槽位、测试结果。
 
-## Step 2 集成
+## 算法接口、集成边界与验收依据
 
-- `compressor/attention_probe.py`：旋转后的 Q/K 到 [H,Q,V] 条件视觉注意力，分块计算、GQA 头映射、空因果行归零。
-- `tests/test_attention_probe.py`：完整注意力参考对照、空证据、非法索引及 GPU 精度。
+- 单条无 padding 序列输入：隐藏状态 [S,D]、int64 原始位置 [3,S]、bool 视觉内容掩码 [S]、有效/因果掩码后的跨模态权重 [H,Q,V]；V 列按原视觉顺序，特殊 Token 不属于视觉内容。
+- 默认预算为 ceil(V × (0.25 + 0.50 × entropy))；视觉非空时至少保留一个，无证据保留全部；采用行 Shannon 熵均值，同分优先原索引，不是谱熵。
+- next_position 为原始三轴位置最大值加一，空序列为零；decode rope_delta = next_position − 压缩长度；物理 cache offset 独立增长。
+- Step 2 使用第一层 QKV 预探针，在调度前确定预算，所有层从保留 embeddings 开始 Prefill；以可恢复运行时钩子接入，不改写 site-packages。
+- 首版限 vLLM 0.7.3 V0、单 GPU、单活动请求、n=1/best_of=1；不支持 prompt logprobs、多请求及中间层剪枝。
+- 关闭 prefix caching、chunked prefill、CUDA Graph、异步输出和 swap；先压缩再注册请求，由原生调度器分配、追加和回收 KV blocks。
+- 已有验收：常规测试 72 passed、6 skipped；单独启用真实模型测试 6 passed。5687→5671 Token、视觉 64→48、40 步解码、块峰值 358→357。
+- 未验证 32K、最终 TTFT/显存比例/下游精度；全局 KV pool 预留量与请求实际占用块数不同，诊断 trace 和注意力探针仍有额外开销。
 
-- `compressor/prepared.py`：PreparedRequest、真实模型第一层 QKV 探针、视觉与文本 query 掩码、复用 Step 1 剪枝。
-- `tests/test_prepared.py`：准备结果对齐、rope_delta、全保留与纯文本。
+## Step 3 下一阶段
 
-- `compressor/vllm_engine.py`：版本限定单进程离线引擎；原生预处理、M-RoPE、准备请求、压缩序列注册、原生块管理、异常回收与资源关闭。
-- `compressor/vllm_bridge.py`：可恢复 runner/model 钩子，注入 Prefill embeddings/原始位置，记录位置/slot/Block Table；不改写缓存元数据。
-- `compressor/vllm_compat.py`：torch 2.5 缺失 wrap_triton 时的视觉 rotary 参考实现兼容与恢复。
-- `scripts/run_compressed.py`：合成图像长文本离线入口、全保留开关及 JSON 诊断输出。
-- `tests/test_vllm_bridge.py`、`tests/test_vllm_compat.py`：钩子恢复、元数据不变和兼容数值单测。
-- `tests/test_vllm_integration.py`：环境变量显式开启的 6 项真实模型验收，单次加载模型；默认常规测试跳过。
-- `docs/step2-integration.md`、`docs/step2-validation.json`：运行接口、适用范围、设计及可追溯验收摘要。
-
-Step 2 首版固定单卡、单请求、n=1；关闭 prefix caching、chunked prefill、
-CUDA Graph、异步输出和 swap。使用第一层 QKV 预探针，在调度分配前决定视觉预算；
-所有层从压缩 embeddings 开始 Prefill。多请求和中间层剪枝未实现。
-验收 72 项常规测试 + 6 项真实模型测试；5687 Token 不代表 32K 或最终业务指标。
+- 先测量注意力探针、评分、筛选与推理分段耗时，明确优化对象；再编写 Triton 融合算子。
+- 保留 PyTorch 参考与确定性语义，新增对应 pytest 和 GPU 数值对照；目标为所选算子相对 PyTorch 提速至少 20%。
+- 最终端到端性能和精度报告归 Step 4；本次交付复核未新增算法代码或重跑既有测试。
