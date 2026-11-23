@@ -2,6 +2,7 @@
 from dataclasses import dataclass
 import torch
 from .attention_probe import visual_attention
+from .scoring import score_probe_attention
 from .token_pruner import TokenPruner
 
 
@@ -47,8 +48,8 @@ def prepare_request(model, token_ids, positions, mm_kwargs, special_ids,
             q.reshape(-1, attn.num_heads, attn.head_dim),
             k.reshape(-1, attn.num_kv_heads, attn.head_dim),
             torch.where(query_mask)[0], torch.where(visual)[0])
-    result = pruner(
-        embeddings, positions, visual, attention)
+    result = pruner._prune(
+        embeddings, positions, visual, attention, score_probe_attention)
     kept = result.kept_indices
     return PreparedRequest(
         ids.index_select(0, kept).tolist(), result.hidden_states,

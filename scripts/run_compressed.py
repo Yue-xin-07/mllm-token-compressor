@@ -7,6 +7,19 @@ import sys
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 
+def make_prompt(text_repeats):
+    from PIL import Image
+
+    image = Image.new("RGB", (224, 224), (220, 30, 30))
+    return {
+        "prompt": "<|im_start|>user\n<|vision_start|><|image_pad|><|vision_end|>"
+                  + "Context: this is a test. " * text_repeats
+                  + "\nWhat is the main color in the image? Answer briefly."
+                  + "<|im_end|>\n<|im_start|>assistant\n",
+        "multi_modal_data": {"image": image},
+    }
+
+
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--model", default="/root/autodl-tmp/models/Qwen2.5-VL-7B-Instruct")
@@ -16,18 +29,10 @@ def main():
     parser.add_argument("--keep-all", action="store_true")
     parser.add_argument("--output", default="/tmp/mllm-step2-result.json")
     args = parser.parse_args()
-    from PIL import Image
     from vllm import SamplingParams
     from compressor.vllm_engine import CompressedEngine
     adapter = CompressedEngine(args.model, args.max_model_len)
-    image = Image.new("RGB", (224, 224), (220, 30, 30))
-    prompt = {
-        "prompt": "<|im_start|>user\n<|vision_start|><|image_pad|><|vision_end|>"
-                  + "Context: this is a test. " * args.text_repeats
-                  + "\nWhat is the main color in the image? Answer briefly."
-                  + "<|im_end|>\n<|im_start|>assistant\n",
-        "multi_modal_data": {"image": image},
-    }
+    prompt = make_prompt(args.text_repeats)
     params = SamplingParams(temperature=0, max_tokens=args.max_tokens,
                             ignore_eos=True)
     ratio = 1. if args.keep_all else .25

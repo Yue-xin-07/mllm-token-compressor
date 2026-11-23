@@ -46,6 +46,27 @@ def score_attention(
     if visual_count > 1:
         terms = probabilities * probabilities.clamp_min(torch.finfo(torch.float32).tiny).log()
         entropy = float((-terms.sum(dim=-1).mean() / math.log(visual_count)).clamp(0, 1))
+    return AttentionBudget(scores, entropy, _keep_count(visual_count, entropy, min_ratio, max_ratio))
+
+
+def _keep_count(visual_count, entropy, min_ratio, max_ratio):
     ratio = min_ratio + (max_ratio - min_ratio) * entropy
-    keep_count = min(visual_count, max(1, math.ceil(visual_count * ratio)))
-    return AttentionBudget(scores, entropy, keep_count)
+    return min(visual_count, max(1, math.ceil(visual_count * ratio)))
+
+
+@torch.inference_mode()
+def score_probe_attention(attention, min_ratio=.25, max_ratio=.75):
+    """Score trusted output from visual_attention, or use the PyTorch reference."""
+    if (attention.is_cuda and attention.dtype == torch.float32
+            and attention.is_contiguous() and attention.numel()
+            and 64 <= attention.shape[-1] <= 2048):
+        with torch.cuda.device(attention.device):
+            if torch.cuda.get_device_capability() >= (8, 0):
+                try:
+                    from .triton_scoring import score_cuda_attention
+                except ModuleNotFoundError as error:
+                    if error.name != "triton":
+                        raise
+                else:
+                    return score_cuda_attention(attention, min_ratio, max_ratio)
+    return score_attention(attention, min_ratio, max_ratio)

@@ -43,8 +43,11 @@ class TokenPruner:
         visual_mask: torch.Tensor,
         attention: torch.Tensor,
     ) -> PruningResult:
+        return self._prune(hidden_states, position_ids, visual_mask, attention, score_attention)
+
+    def _prune(self, hidden_states, position_ids, visual_mask, attention, scorer):
         self._validate(hidden_states, position_ids, visual_mask, attention)
-        budget = score_attention(attention, self.min_ratio, self.max_ratio)
+        budget = scorer(attention, self.min_ratio, self.max_ratio)
         visual_indices = torch.where(visual_mask)[0]
         keep_mask = ~visual_mask
         # stable sorting breaks ties by original index, including CUDA.

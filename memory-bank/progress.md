@@ -1,6 +1,6 @@
 # 进度追踪 (Progress Tracker)
 
-- **当前状态**: Step 0、Step 1、Step 2 单卡单请求首版已完成；Step 3 尚未开始。
+- **当前状态**: Step 0–3 已完成，Step 2 为单卡单请求首版；下一阶段为 Step 4。
 - **已完成任务**:
   - 项目脚手架与记忆库初始化；在 AutoDL 项目目录初始化 `main` 分支并推送首次提交。
   - 新增 `scripts/check_env.py` 和 `scripts/download_model.py`。
@@ -14,10 +14,7 @@
 - **当前正在进行的任务**:
   - 无。
 - **下一步**:
-  - **Step 3：Triton 自定义算子加速核心瓶颈**。
-  - 先测量 Step 2 注意力探针、评分及筛选开销，再确定融合算子边界。
-  - 保持 PyTorch 参考实现与确定性语义，新增算子测试及 GPU 数值对照；在明确输入规模和计时方法后，验收所选算子相对 PyTorch 提速 ≥20%。
-  - 多请求调度、32K 端到端及最终性能/精度不属于已完成的 Step 2 首版验收。
+  - **Step 4：自动化压测、显存监控与指标产出**。建立 32K、混合并发与原生模型对照，记录 TTFT、峰值显存、吞吐和下游精度。
 - **已知阻碍/验证记录**:
   - AutoDL 驱动 595.71.05 报告 CUDA 13.2；PyTorch CUDA 12.1 runtime 已验证正常。
   - 首次模型冒烟检查因隔离环境缺少 setuptools 失败；安装 setuptools 80.10.2 后重跑成功。
@@ -58,3 +55,18 @@
   - 提交信息采用 Conventional Commits；交付文档提交后，将连同 3 个 Step 2 实现提交推送至 origin/main。
 
 - **Step 3.1 基线测量**：在 RTX 4090 上以 Qwen2.5-VL 形状的 BF16 合成 Q/K 和 FP32 注意力计时。20 次同步测量的中位数显示，5623 文本 query、64 视觉 Token 时探针/评分分别为 13.2482/0.9623 ms；2048 query、1024 视觉 Token 时分别为 5.0503/7.8544 ms。先融合 GPU 评分中的行归一化、熵和列汇总，保留探针和稳定排序。
+
+- **Step 3.2 Triton 评分实现及 RTX 4090 验收（2026-11-23）**：
+  - 融合行归一化、熵、有效行计数和视觉列部分归约，接入 Qwen2.5-VL 请求准备。保留稳定排序和 PyTorch 参考。
+  - 以 10 次预热、50 次 CUDA 同步墙钟计时的中位数比较两个后端。四组的视觉保留预算与保留索引一致。
+
+  | 文本 query / 视觉 Token | 探针 ms | PyTorch 评分 ms | Triton 评分 ms | 含评分剪枝 ms（PyTorch → Triton） |
+  | --- | ---: | ---: | ---: | ---: |
+  | 512 / 64 | 1.3691 | 0.3111 | 0.0944 | 0.5754 → 0.3398 |
+  | 2048 / 256 | 4.4825 | 1.6939 | 0.1379 | 1.9703 → 0.4430 |
+  | 5623 / 64 | 12.4808 | 0.9625 | 0.1083 | 1.3144 → 0.5224 |
+  | 2048 / 1024 | 5.2197 | 7.8515 | 0.4079 | 8.1938 → 0.7527 |
+
+  - 真实模型 5687→5671 Token，3 次热请求的中位数为请求准备 80.53 ms、Prefill 步 530.38 ms、后续 7 步 Decode 合计 136.77 ms。该记录用于定位阶段耗时；端到端前后对照归 Step 4。
+  - 复现：`.venv/bin/python scripts/benchmark_compression.py --warmup 10 --repeats 50 --model /root/autodl-tmp/models/Qwen2.5-VL-7B-Instruct`。
+  - `MLLM_RUN_INTEGRATION=1 .venv/bin/python -m pytest tests/ -q`：91 passed，含 13 项新增评分/接入测试和 6 项真实模型回归。

@@ -2,7 +2,7 @@
 
 ## 当前阶段与项目规则
 
-- 当前已完成 Step 0、Step 1 和 Step 2 单卡单请求首版；下一阶段为 Step 3：先定位评分/筛选瓶颈，再实现 Triton 融合算子。
+- 当前已完成 Step 0–3，其中 Step 2 为单卡单请求首版，Step 3 为视觉注意力评分 Triton 加速。下一阶段为 Step 4 自动化压测。
 - `AGENTS.md`：Memory Bank 优先、单文件 300 行上限、算法 pytest 闭环、子步骤更新文档并提交 Git，以及 AutoDL SSH 说明。
 - `.gitignore`：排除缓存、虚拟环境、Notebook 检查点、模型权重、数据集和运行产物。
 - `.venv/`：Python 3.11；PyTorch 2.5.1+cu121、Transformers 4.51.3、vLLM 0.7.3、FlashAttention-2 2.8.3.post2 等隔离依赖。
@@ -59,10 +59,10 @@
 - 已有验收：常规测试 72 passed、6 skipped；单独启用真实模型测试 6 passed。5687→5671 Token、视觉 64→48、40 步解码、块峰值 358→357。
 - 未验证 32K、最终 TTFT/显存比例/下游精度；全局 KV pool 预留量与请求实际占用块数不同，诊断 trace 和注意力探针仍有额外开销。
 
-## Step 3 下一阶段
+## Step 3 评分加速与验证
 
-- 先测量注意力探针、评分、筛选与推理分段耗时，明确优化对象；再编写 Triton 融合算子。
-- 保留 PyTorch 参考与确定性语义，新增对应 pytest 和 GPU 数值对照；目标为所选算子相对 PyTorch 提速至少 20%。
-- 最终端到端性能和精度报告归 Step 4；本次交付复核未新增算法代码或重跑既有测试。
-
-- Step 3.1 新增 `scripts/benchmark_compression.py`，测量 RTX 4090 上的注意力探针、评分、含评分剪枝。覆盖 512–5623 文本 query、64–1024 视觉 Token；宽视觉输入选择评分为首个融合目标。
+- `compressor/triton_scoring.py`：融合 FP32 行归一化、Shannon 熵和视觉列部分归约，避免完整的归一化和熵中间张量。GPU 汇总部分归约，CPU 计算整数保留预算。
+- `compressor/scoring.py` 与 `compressor/prepared.py`：请求准备路径对支持的 CUDA sm80+、连续 FP32、64–2048 视觉 Token 的探针输出选用 Triton。预算逼近整数且动态比例可能影响取整时，使用 PyTorch 参考。空证据保留全部，非法注意力报错，稳定排序仍按原视觉索引打破同分。
+- `tests/test_triton_scoring.py`：覆盖 CUDA 数值与预算对照、空行、同分、非法权重、边界回退及请求准备路径。
+- `scripts/benchmark_compression.py`：比较一次注意力探针、PyTorch/Triton 评分和含评分剪枝。可通过 `--model` 添加真实模型请求准备、Prefill 与 Decode 的分段耗时。
+- Step 3 验收为 91 passed，其中包含 6 项真实模型回归。RTX 4090 四组合成输入的评分耗时下降 69.7%–94.8%。端到端对照、32K、多请求、显存和精度评估归 Step 4。
