@@ -82,3 +82,6 @@
 - `compressor/vllm_compat.py`：对图像限额配置临时修正启动探针中的额外图像占位符，原生和压缩使用该同一兼容路径。
 - `scripts/benchmark_e2e.py` 与 `scripts/benchmark_workloads.py`：构造精确的预处理长度，独立进程运行双后端，写逐轮结果及错误，采样 NVML 和 PyTorch 显存。
 - `tests/test_vllm_workload.py` 及桥接、兼容与真实模型回归：覆盖首 Token 计时、KV 采样时点、批内对齐、启动探针、全保留输出与异常恢复。
+- `scripts/evaluate_screenspot.py` 与 `scripts/screenspot_metrics.py`：加载 SeeClick 原版三组标注与图像，使用统一的归一化坐标提示和确定性生成，按点击是否落入标注框判分。批次可从同配置的输出恢复。
+- `scripts/report_evaluation.py`：校验双端配置，汇总逐轮性能与逐样本精度，计算目标达成状态并生成 Markdown 报告。
+- `tests/test_screenspot_metrics.py`：验证坐标变换、边界、越界及无效输出判分。
