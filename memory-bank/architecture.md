@@ -95,3 +95,7 @@
 - `scripts/benchmark_e2e.py`：保留原始 32K 和混合用例，额外测量工作集策略。
 - `scripts/gui_protocol.py` 和 `scripts/evaluate_gui.py`：共享工具坐标前缀，以模型缩放后的像素空间解码、映射至原图，写出可续跑的 ScreenSpot 逐样本结果。
 - `scripts/gui_replay.py` 和 `scripts/evaluate_gui_replay.py`：真实截图加模拟任务记录，按截图分离开发集与留出集，六种策略共用证据与点击判分。
+
+- `scripts/report_gui.py` 和 `scripts/gui_figures.py`：核对成对数据，生成性能图、点击回放、质量和消融表。
+- `scripts/reproduce_gui.sh`：依次复跑冻结的像素点击协议、正式性能与留出回放。
+- `docs/gui-evaluation.md` 与 `docs/gui-replay.md`：GUI 结果与示例。原视觉压缩报告仍记录 Step 4 基线。

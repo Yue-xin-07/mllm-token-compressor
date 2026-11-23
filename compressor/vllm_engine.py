@@ -6,6 +6,7 @@ import torch
 from .prepared import prepare_request
 from .vllm_bridge import RunnerBridge
 from .vllm_workload import run_workload
+from .working_set import DEFAULT_BUDGET
 
 
 class CompressedEngine:
@@ -132,7 +133,7 @@ class CompressedEngine:
     def generate_native_batch(self, prompts, sampling_params):
         return self._run_batch(prompts, sampling_params, None)
 
-    def generate_context_batch(self, contexts, sampling_params, *, budget=18432,
+    def generate_context_batch(self, contexts, sampling_params, *, budget=DEFAULT_BUDGET,
                                strategy="working_set"):
         from .context_submission import context_submitter
         planner = context_submitter(self, sampling_params, budget, strategy)

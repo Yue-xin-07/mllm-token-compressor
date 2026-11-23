@@ -22,7 +22,8 @@ class HistoryRecord:
     requires: tuple[str, ...] = ()
 
     def __post_init__(self):
-        if self.text.count(IMAGE) != int(self.image is not None):
+        expected = int(self.image is not None)
+        if self.text.count(IMAGE) != expected or self.text.count("<|image_pad|>") != expected:
             raise ValueError("each image requires exactly one complete placeholder")
 
 
@@ -101,24 +102,23 @@ def select_history(context: GUIContext, cost: Callable[[HistoryRecord], int],
     if budget < 1 or strategy not in STRATEGIES:
         raise ValueError("invalid context budget or strategy")
     history = context.history
+    expand = strategy in {"working_set", "oracle"}
     if not history:
-        return Selection(history)
-    costs = {record.id: cost(record) for record in history}
-    fixed = cost(context.prefix) + cost(context.suffix)
-    if fixed + sum(costs.values()) <= budget:
-        return Selection(history)
-
+        return Selection(history, "missing_reference" if expand and context.required else None)
     by_id = {record.id: record for record in history}
     if len(by_id) != len(history):
         return Selection(history, "duplicate_record_id")
     protected = {history[-1].id}
-    expand = strategy in {"working_set", "oracle"}
     if expand:
         protected.update(context.required)
         references = protected | {key for record in history for key in record.requires}
         if not references <= by_id.keys():
             return Selection(history, "missing_reference")
         protected = add_dependencies(protected, by_id)
+    costs = {record.id: cost(record) for record in history}
+    fixed = cost(context.prefix) + cost(context.suffix)
+    if strategy != "oracle" and fixed + sum(costs.values()) <= budget:
+        return Selection(history)
     remaining = budget - fixed - sum(costs[key] for key in protected)
     if remaining < 0:
         return Selection(history, "protected_context_exceeds_budget")

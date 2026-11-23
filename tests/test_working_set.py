@@ -22,6 +22,8 @@ def test_protected_dependency_and_original_order():
     result = select_history(context(records, ("call",)), cost, budget=7)
     assert result.kept == ["state", "call", "recent"]
     assert result.fallback is None
+    lexical = select_history(context(records, ("call",)), cost, budget=7, strategy="bm25")
+    assert lexical.kept == ["noise", "recent"]
 
 
 def test_recent_and_bm25_differ_at_equal_budget():
@@ -63,3 +65,17 @@ def test_text_split_retains_source_order_and_bytes():
     parts = split_text("abc你def", Tokenizer(), "p", 3)
     assert [p.text for p in parts] == ["abc", "你de", "f"]
     assert [p.id for p in parts] == ["p0", "p1", "p2"]
+
+
+
+def test_malformed_image_placeholder_is_rejected_before_submission():
+    with pytest.raises(ValueError, match="complete placeholder"):
+        HistoryRecord("bad", "<|image_pad|>")
+    image = Image.new("RGB", (28, 28))
+    with pytest.raises(ValueError, match="complete placeholder"):
+        HistoryRecord("bad", IMAGE + "<|image_pad|>", image)
+
+
+def test_short_unsupported_references_report_fallback():
+    request = context([HistoryRecord("recent", "latest ")], ("missing",))
+    assert select_history(request, cost, 100).fallback == "missing_reference"
