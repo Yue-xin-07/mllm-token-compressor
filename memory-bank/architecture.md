@@ -87,3 +87,7 @@
 - `tests/test_screenspot_metrics.py`：验证坐标变换、边界、越界及无效输出判分。
 - 32K 对照给两端配置相同的 2,114 个 16 Token KV 块，PyTorch 分配器启用可扩展 CUDA 段。
 - `evaluation_report.md`：正式评估报告，含目标判定、双端性能表、ScreenSpot 分组准确率和复现命令。原始 JSON 位于 AutoDL 的 `outputs/step4/`。
+
+## GUI Agent 工作集
+
+- `compressor/working_set.py`：结构化文本和截图、确定性排序、依赖闭包与预算回退。
