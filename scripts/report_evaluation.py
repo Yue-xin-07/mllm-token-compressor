@@ -28,11 +28,13 @@ def paired(root, prefix):
 def perf_stats(rounds):
     ttft = sorted(row["ttft_ms"] for trial in rounds for row in trial["requests"])
     tokens = sum(row["output_tokens"] for trial in rounds for row in trial["requests"])
+    process_memory = max((trial.get("peak_process_memory_bytes") or 0 for trial in rounds))
     return [
         median(ttft),
         ttft[ceil(.95 * len(ttft)) - 1],
         tokens / sum(trial["elapsed_seconds"] for trial in rounds),
         max(trial["peak_device_memory_bytes"] for trial in rounds) / GIB,
+        process_memory / GIB if process_memory else None,
         max(trial["peak_torch_reserved_bytes"] for trial in rounds) / GIB,
         max(trial["peak_torch_allocated_bytes"] for trial in rounds) / GIB,
         max(trial["kv_pool_bytes"] for trial in rounds) / GIB,
@@ -45,7 +47,7 @@ def performance(native, compressed):
         "## Performance",
         "",
         "TTFT uses burst submission to first returned token. Throughput divides total output "
-        "tokens by total measured wall time. GPU device peaks are sampled by NVML every "
+        "tokens by total measured wall time. GPU device and process peaks are sampled by NVML every "
         "10 ms. PyTorch peaks are process-local allocator metrics. KV occupancy comes from "
         "the scheduler after block allocation and before generated results can free blocks.",
         "",
@@ -66,7 +68,7 @@ def performance(native, compressed):
         "",
     ]
     labels = ("TTFT p50 (ms)", "TTFT p95 (ms)", "Output tokens/s",
-              "Peak device memory (GiB)", "Peak PyTorch reserved (GiB)",
+              "Peak device memory (GiB)", "Peak process memory (GiB)", "Peak PyTorch reserved (GiB)",
               "Peak PyTorch allocated (GiB)", "KV pool (GiB)", "Peak occupied KV (GiB)")
     gates = {}
     for name, raw in native["cases"].items():
@@ -82,8 +84,11 @@ def performance(native, compressed):
             continue
         a, b = perf_stats(base), perf_stats(pruned)
         lines += ["| Metric | Native | Compressed | Change |", "| --- | ---: | ---: | ---: |"]
-        lines += [f"| {label} | {x:.3f} | {y:.3f} | {(y / x - 1) * 100:+.2f}% |"
-                  for label, x, y in zip(labels, a, b)]
+        for label, x, y in zip(labels, a, b):
+            left = "Unavailable" if x is None else f"{x:.3f}"
+            right = "Unavailable" if y is None else f"{y:.3f}"
+            percent = "—" if not x or y is None else f"{(y / x - 1) * 100:+.2f}%"
+            lines.append(f"| {label} | {left} | {right} | {percent} |")
         rows = pruned[0]["requests"]
         vision = [row["visual_tokens"] for row in rows]
         removable = sum(value - ceil(.25 * value) for value in vision)

@@ -1,4 +1,5 @@
 """Deterministic input construction and GPU memory sampling for Step 4."""
+from os import getpid
 from threading import Event, Thread
 from uuid import uuid4
 
@@ -53,10 +54,20 @@ def measure(run, record_memory):
         handle = pynvml.nvmlDeviceGetHandleByIndex(0)
         stop = Event()
         samples = []
+        process_samples = []
+        pid = getpid()
         sample_errors = []
 
         def sample():
             samples.append(pynvml.nvmlDeviceGetMemoryInfo(handle).used)
+            try:
+                processes = pynvml.nvmlDeviceGetComputeRunningProcesses(handle)
+            except (pynvml.NVMLError_NotSupported, pynvml.NVMLError_NoPermission):
+                return
+            process_samples.extend(
+                process.usedGpuMemory for process in processes
+                if process.pid == pid and process.usedGpuMemory is not None
+            )
 
         def poll():
             while not stop.wait(.01):
@@ -82,6 +93,7 @@ def measure(run, record_memory):
             raise RuntimeError("NVML polling failed") from sample_errors[0]
         stats.update(
             peak_device_memory_bytes=max(samples),
+            peak_process_memory_bytes=max(process_samples, default=None),
             peak_torch_allocated_bytes=torch.cuda.max_memory_allocated(),
             peak_torch_reserved_bytes=torch.cuda.max_memory_reserved(),
         )

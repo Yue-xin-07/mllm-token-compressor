@@ -80,7 +80,7 @@
 - `compressor/vllm_bridge.py`：按序列组顺序拼接压缩 Prefill 的 embeddings 与 M-RoPE 位置，保留原生缓存元数据，完成 Prefill 后释放准备数据。仅接入无 chunked prefill 的默认 V0 调度。
 - `compressor/vllm_workload.py`：提交整批、记录首输出 Token、在调度阶段采集 KV 峰值、记录实际批大小。发生抢占时中止该轮并恢复调度钩子与缓存。
 - `compressor/vllm_compat.py`：对图像限额配置临时修正启动探针中的额外图像占位符，原生和压缩使用该同一兼容路径。
-- `scripts/benchmark_e2e.py` 与 `scripts/benchmark_workloads.py`：构造精确的预处理长度，独立进程运行双后端，写逐轮结果及错误，采样 NVML 和 PyTorch 显存。
+- `scripts/benchmark_e2e.py` 与 `scripts/benchmark_workloads.py`：构造精确的预处理长度，独立进程运行双后端，写逐轮结果及错误，分别采样 NVML 设备与进程显存、PyTorch 分配和保留峰值。
 - `tests/test_vllm_workload.py` 及桥接、兼容与真实模型回归：覆盖首 Token 计时、KV 采样时点、批内对齐、启动探针、全保留输出与异常恢复。
 - `scripts/evaluate_screenspot.py` 与 `scripts/screenspot_metrics.py`：加载 SeeClick 原版三组标注与图像，使用统一的归一化坐标提示和确定性生成，按点击是否落入标注框判分。批次可从同配置的输出恢复。
 - `scripts/report_evaluation.py`：校验双端配置，汇总逐轮性能与逐样本精度，计算目标达成状态并生成 Markdown 报告。
